@@ -6,10 +6,9 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
-
 COPY . .
+
+RUN pip install --no-cache-dir .
 
 EXPOSE 5060/udp 8000
 
