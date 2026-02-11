@@ -626,7 +626,7 @@ def _extract_tn_data(tnalloc: ACDC) -> Any:
     """Extract TN allocation data from a TNAlloc credential's attributes.
 
     Tries the following attribute keys in order: ``tn``, ``phone``,
-    ``allocation``.
+    ``numbers``, ``allocation``.
 
     Parameters
     ----------
@@ -644,6 +644,7 @@ def _extract_tn_data(tnalloc: ACDC) -> Any:
     return (
         tnalloc.attributes.get("tn")
         or tnalloc.attributes.get("phone")
+        or tnalloc.attributes.get("numbers")
         or tnalloc.attributes.get("allocation")
     )
 

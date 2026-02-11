@@ -59,7 +59,9 @@ KNOWN_SCHEMAS: Dict[str, FrozenSet[str]] = {
     "DE": frozenset({
         "EL7irIKYJL9Io0hhKSGWI4OznhwC7qgJG5Qf4aEs6j0o",
     }),
-    "TNAlloc": frozenset(),  # Pending governance
+    "TNAlloc": frozenset({
+        "EFvnoHDY7I-kaBBeKlbDbkjG4BaI0nKLGadxBdjMGgSQ",  # Base TN Allocation
+    }),
 }
 
 
