@@ -63,12 +63,15 @@ class PassportPayload:
     """Decoded payload of the PASSporT JWT.
 
     Attributes:
-        iat:   Issued-at timestamp (UNIX epoch seconds).
-        orig:  Originating identity (dict with ``tn`` list).
-        dest:  Destination identity (dict with ``tn`` list).
-        evd:   Evidence URL (from top-level or ``attest.creds``).
-        exp:   Optional expiry timestamp.
-        card:  Optional rich-call-data / brand card dict.
+        iat:      Issued-at timestamp (UNIX epoch seconds).
+        orig:     Originating identity (dict with ``tn`` list).
+        dest:     Destination identity (dict with ``tn`` list).
+        evd:      Evidence URL (from top-level or ``attest.creds``).
+        exp:      Optional expiry timestamp.
+        card:     Optional RFC 6350 vCard property array
+                  (e.g. ``["FN:Acme Corp", "TEL:+12025551234"]``).
+        call_id:  Optional SIP Call-ID from PASSporT claims.
+        cseq:     Optional SIP CSeq from PASSporT claims.
     """
 
     iat: int
@@ -76,7 +79,9 @@ class PassportPayload:
     dest: Optional[Dict[str, Any]] = None
     evd: Optional[str] = None
     exp: Optional[int] = None
-    card: Optional[Dict[str, Any]] = None
+    card: Optional[List[str]] = None
+    call_id: Optional[str] = None
+    cseq: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -282,11 +287,22 @@ def _extract_payload(data: Dict[str, Any]) -> Tuple[PassportPayload, List[str]]:
     if "exp" in data:
         exp = _require_int(data, "exp")
 
-    # card (optional)
-    card_raw = data.get("card")
-    card: Optional[Dict[str, Any]] = None
-    if isinstance(card_raw, dict):
-        card = card_raw
+    # card: RFC 6350 vCard property array
+    raw_card = data.get("card")
+    card: Optional[List[str]] = None
+    if isinstance(raw_card, list):
+        card = [str(item) for item in raw_card if isinstance(item, str)]
+    elif isinstance(raw_card, dict):
+        # Legacy dict format - convert to vCard array format
+        card = None  # Cannot reliably convert, discard
+
+    # call_id (optional)
+    call_id_raw = data.get("call-id") or data.get("call_id")
+    call_id = str(call_id_raw)[:256] if call_id_raw and isinstance(call_id_raw, str) else None
+
+    # cseq (optional)
+    cseq_raw = data.get("cseq")
+    cseq = str(cseq_raw)[:64] if cseq_raw and isinstance(cseq_raw, str) else None
 
     payload = PassportPayload(
         iat=iat,
@@ -295,6 +311,8 @@ def _extract_payload(data: Dict[str, Any]) -> Tuple[PassportPayload, List[str]]:
         evd=evd,
         exp=exp,
         card=card,
+        call_id=call_id,
+        cseq=cseq,
     )
     return payload, warnings
 
