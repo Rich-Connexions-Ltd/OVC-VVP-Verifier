@@ -14,6 +14,13 @@ have been ratified yet.  ``is_known_schema`` returns ``True`` for
 these types regardless of the SAID presented, allowing forward
 compatibility while governance catches up.
 
+Additional credential types supported:
+
+- ``"BrandOwner"`` — Provenant brand-owner credential (vCard array + logo hash).
+- ``"ExtendedBrand"`` — Extended brand credential (legacy scalar-field, deprecated).
+- ``"VetterCert"`` — VVP VetterCert credential.
+- ``"VetterGov"`` — VVP VetterGov credential.
+
 References
 ----------
 - GLEIF vLEI Ecosystem Governance Framework
@@ -26,8 +33,10 @@ from typing import Dict, FrozenSet, Optional
 
 __all__ = [
     "KNOWN_SCHEMAS",
+    "BRAND_SCHEMA_SAIDS",
     "get_credential_type",
     "is_known_schema",
+    "is_brand_schema",
 ]
 
 
@@ -61,6 +70,19 @@ KNOWN_SCHEMAS: Dict[str, FrozenSet[str]] = {
     }),
     "TNAlloc": frozenset({
         "EFvnoHDY7I-kaBBeKlbDbkjG4BaI0nKLGadxBdjMGgSQ",  # Base TN Allocation
+        "EGUh_fVLbjfkYFb5zAsY2Rqq0NqwnD3r5jsdKWLTpU8_",  # Extended TN Allocation
+    }),
+    "BrandOwner": frozenset({
+        "EFdennObbYoKFHlMbLkskgED-2w-npDO11yDvcNUhjsk",  # Provenant brand-owner v1.0.0 (vcard array + logo hash)
+    }),
+    "ExtendedBrand": frozenset({
+        "EK7kPhs5YkPsq9mZgUfPYfU-zq5iSlU8XVYJWqrVPk6g",  # Extended brand credential (legacy scalar-field, deprecated)
+    }),
+    "VetterCert": frozenset({
+        "EOefmhWU2qTpMiEQhXohE6z3xRXkpLloZdhTYIenlD4H",  # VVP VetterCert schema
+    }),
+    "VetterGov": frozenset({
+        "EIBowJmxx5hNWQlfXqGcbN0aP_RBuucMW6mle4tAN6TL",  # VVP VetterGov schema
     }),
 }
 
@@ -94,6 +116,18 @@ def get_credential_type(schema_said: str) -> Optional[str]:
         ``None`` if the SAID is not in the registry.
     """
     return _SAID_TO_TYPE.get(schema_said)
+
+
+# All brand-related schema SAIDs (for brand credential detection)
+BRAND_SCHEMA_SAIDS: frozenset[str] = (
+    KNOWN_SCHEMAS.get("BrandOwner", frozenset())
+    | KNOWN_SCHEMAS.get("ExtendedBrand", frozenset())
+)
+
+
+def is_brand_schema(schema_said: str) -> bool:
+    """Return True if schema_said belongs to a brand credential type."""
+    return schema_said in BRAND_SCHEMA_SAIDS
 
 
 def is_known_schema(cred_type: str, said: str) -> bool:

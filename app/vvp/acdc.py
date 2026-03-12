@@ -31,6 +31,7 @@ from app.vvp.canonical import (
     FIELD_ORDER,
     CanonicalSerializationError,
     canonical_serialize,
+    compute_acdc_said,
     most_compact_form,
 )
 from app.vvp.models import (
@@ -41,7 +42,7 @@ from app.vvp.models import (
     ErrorDetail,
     make_error,
 )
-from app.vvp.schema import get_credential_type
+from app.vvp.schema import get_credential_type, is_brand_schema
 
 # Lazy import: blake3 is required for SAID computation but may not
 # be installed in lightweight environments.
@@ -238,14 +239,22 @@ def compute_said(data: dict) -> str:
         except CanonicalSerializationError:
             # Fall back to manual placeholder approach.
             serialized = _placeholder_serialize(data)
+
+        digest = blake3.blake3(serialized).digest()
+        encoded = _base64url_encode_no_pad(digest[:32])
+
+        # CESR E-prefix SAID: "E" + first 43 base64url characters.
+        return _SAID_PREFIX + encoded[:_SAID_B64_LEN]
     else:
+        # ACDC credential (no 't' field) - use ACDC canonical ordering
+        result = compute_acdc_said(data)
+        if result:
+            return result
+        # Fallback to simple placeholder if compute_acdc_said returns empty
         serialized = _placeholder_serialize(data)
-
-    digest = blake3.blake3(serialized).digest()
-    encoded = _base64url_encode_no_pad(digest[:32])
-
-    # CESR E-prefix SAID: "E" + first 43 base64url characters.
-    return _SAID_PREFIX + encoded[:_SAID_B64_LEN]
+        digest = blake3.blake3(serialized).digest()
+        encoded = _base64url_encode_no_pad(digest[:32])
+        return _SAID_PREFIX + encoded[:_SAID_B64_LEN]
 
 
 def _placeholder_serialize(data: dict) -> bytes:
@@ -631,6 +640,20 @@ def verify_chain(dag: DossierDAG) -> ClaimNode:
         cred_evidence.append(f"schema={acdc.schema}")
         if cred_type:
             cred_evidence.append(f"type={cred_type}")
+
+        # Brand credentials are display-only leaf nodes, not authority-bearing.
+        is_brand = is_brand_schema(acdc.schema)
+        if is_brand:
+            cred_name = cred_type if cred_type else f"credential_{said[:8]}"
+            cred_node = ClaimNode(
+                name=cred_name,
+                status=ClaimStatus.VALID,
+                reasons=[],
+                evidence=cred_evidence + ["display-only: brand credential, not authority-bearing"],
+                children=[],
+            )
+            child_claims.append(ChildLink(node=cred_node, required=False))  # not required for auth
+            continue
 
         # 2. SAID validation.
         said_claim = _verify_credential_said(acdc)

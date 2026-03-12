@@ -29,6 +29,7 @@ __all__ = [
     "FIELD_ORDER",
     "canonical_serialize",
     "most_compact_form",
+    "compute_acdc_said",
     "CanonicalSerializationError",
 ]
 
@@ -156,6 +157,81 @@ def canonical_serialize(event: dict) -> bytes:
         ordered = dict(sorted(event.items()))
 
     return json.dumps(ordered, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+# ACDC canonical field ordering per keripy SerderACDC v1.0 FieldDom
+_ACDC_FIELD_ORDER = ["v", "d", "u", "i", "ri", "s", "a", "A", "e", "r"]
+
+
+def compute_acdc_said(acdc_data: dict, said_field: str = "d") -> str:
+    """Compute the SAID for an ACDC credential using ACDC canonical field ordering.
+
+    ACDC credentials use a different field ordering from KEL events.
+    This function applies the ACDC-specific ordering (v, d, u, i, ri, s, a, A, e, r)
+    for deterministic serialization before hashing.
+
+    The version string size field is updated to reflect the actual byte length
+    of the serialized credential with the SAID placeholder.
+
+    Parameters
+    ----------
+    acdc_data : dict
+        The ACDC credential dictionary.
+    said_field : str
+        The field holding the SAID value (default ``"d"``).
+
+    Returns
+    -------
+    str
+        The computed 44-character SAID (CESR ``E``-prefix Blake3-256 digest),
+        or an empty string if the said_field is absent.
+    """
+    import re as _re
+
+    try:
+        import blake3 as _blake3
+    except ImportError:
+        return ""
+
+    if said_field not in acdc_data:
+        return ""
+
+    placeholder = "#" * 44
+
+    work = dict(acdc_data)
+    work[said_field] = placeholder
+
+    # Build ordered dict using ACDC field ordering
+    ordered: dict = {}
+    for key in _ACDC_FIELD_ORDER:
+        if key in work and work[key] is not None:
+            ordered[key] = work[key]
+    for key in work:
+        if key not in ordered and work[key] is not None:
+            ordered[key] = work[key]
+
+    # Update version string size if present
+    if "v" in ordered:
+        vs = ordered["v"]
+        vs_match = _re.match(r"^([A-Z]{4})(\d)(\d)([A-Z]+)([0-9a-f]{6})(_?)$", vs)
+        if vs_match:
+            proto, major, minor, kind, _old_size, term = vs_match.groups()
+            # Dummy version for size computation
+            ordered["v"] = "#" * len(vs)
+            raw_for_size = json.dumps(ordered, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            size = len(raw_for_size)
+            ordered["v"] = f"{proto}{major}{minor}{kind}{size:06x}{term}"
+
+    canonical_bytes = json.dumps(ordered, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+    import base64 as _base64
+    digest = _blake3.blake3(canonical_bytes).digest()
+    # CESR E-prefix encoding: ps=1 for 32-byte digest
+    ps = (3 - (len(digest) % 3)) % 3
+    prepadded = bytes([0] * ps) + digest
+    b64 = _base64.urlsafe_b64encode(prepadded).decode("ascii")
+    trimmed = b64[ps:].rstrip("=")
+    return "E" + trimmed
 
 
 def most_compact_form(

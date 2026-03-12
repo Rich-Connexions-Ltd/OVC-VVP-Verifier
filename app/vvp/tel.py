@@ -20,6 +20,7 @@ where bracket counting is used to extract embedded JSON objects.
 TEL event types recognized:
 
 - ``"iss"`` — Issuance (credential is active).
+- ``"bis"`` — Backerless issuance (credential is active, backer-independent registry).
 - ``"rev"`` — Revocation (credential is permanently revoked).
 - ``"brv"`` — Backerless revocation (same effect as ``"rev"``).
 
@@ -170,7 +171,7 @@ class ChainRevocationResult:
 # ======================================================================
 
 # Recognized TEL event type codes.
-_TEL_EVENT_TYPES = frozenset({"iss", "rev", "brv"})
+_TEL_EVENT_TYPES = frozenset({"iss", "rev", "brv", "bis"})
 
 
 def _parse_event_dict(obj: dict) -> Optional[TELEvent]:
@@ -398,8 +399,9 @@ def _determine_status(events: List[TELEvent]) -> Tuple[CredentialStatus, Optiona
     revocation: Optional[TELEvent] = None
 
     for event in events:
-        if event.type == "iss":
+        if event.type in ("iss", "bis"):
             # Keep the highest-sequence issuance event.
+            # "bis" (backerless issuance) has the same active-credential semantics as "iss".
             if issuance is None or event.sequence > issuance.sequence:
                 issuance = event
         elif event.type in ("rev", "brv"):
