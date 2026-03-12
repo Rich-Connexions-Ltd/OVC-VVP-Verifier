@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin Dashboard — VVP Verifier</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 860px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            color: #333;
+            line-height: 1.6;
+        }
+        h1 { color: #1a73e8; margin-bottom: 0.25rem; }
+        h2 { color: #333; font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+        .lead { color: #555; margin-top: 0; }
+        details { border: 1px solid #ddd; border-radius: 6px; margin: 1rem 0; padding: 0.75rem 1rem; }
+        summary { cursor: pointer; font-weight: 600; font-size: 1rem; }
+        summary:hover { color: #1a73e8; }
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.55rem;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+        .badge-info    { background: #e8f0fe; color: #1a73e8; }
+        .badge-warning { background: #fff3e0; color: #e65100; }
+        .badge-danger  { background: #fce8e6; color: #c5221f; }
+        .badge-ok      { background: #e6f4ea; color: #137333; }
+        .banner {
+            padding: 0.6rem 1rem;
+            border-radius: 4px;
+            margin: 0.75rem 0;
+            font-size: 0.9rem;
+        }
+        .banner-warning { background: #fff3cd; border: 1px solid #ffc107; color: #856404; }
+        .banner-danger  { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .roots-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 0.5rem; }
+        .roots-table th, .roots-table td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid #ddd; }
+        .roots-table th { background: #f5f5f5; font-weight: 600; }
+        .admin-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.75rem; }
+        input[type="text"] { padding: 0.35rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+        button {
+            padding: 0.35rem 0.85rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        button.primary   { background: #1a73e8; color: #fff; }
+        button.secondary { background: #e8f0fe; color: #1a73e8; }
+        button.danger    { background: #c5221f; color: #fff; font-size: 0.8rem; padding: 0.25rem 0.65rem; }
+        .toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.5rem; }
+        .toast {
+            padding: 0.65rem 1.2rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            opacity: 1;
+            transition: opacity 0.4s;
+        }
+        .toast.success { background: #e6f4ea; color: #137333; border: 1px solid #a8d5b5; }
+        .toast.error   { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6cb; }
+        .toast.warning { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        code { background: #f1f3f4; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.88em; }
+        .config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem 1rem; margin-top: 0.5rem; }
+        .config-item { display: flex; flex-direction: column; }
+        .config-key { font-size: 0.8rem; color: #666; font-weight: 600; }
+        .config-value { font-family: monospace; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+<h1>Admin Dashboard</h1>
+<p class="lead">VVP Verifier runtime configuration and trusted roots management.</p>
+
+<!-- Service Status -->
+<details open>
+    <summary>Service Status</summary>
+    <div class="config-grid" style="margin-top:0.75rem;">
+        <div class="config-item">
+            <span class="config-key">Health</span>
+            <span class="config-value" id="health-status">Loading…</span>
+        </div>
+        <div class="config-item">
+            <span class="config-key">Cache Hits</span>
+            <span class="config-value" id="cache-hits">Loading…</span>
+        </div>
+        <div class="config-item">
+            <span class="config-key">Cache Misses</span>
+            <span class="config-value" id="cache-misses">Loading…</span>
+        </div>
+        <div class="config-item">
+            <span class="config-key">SIP Transport</span>
+            <span class="config-value" id="sip-status">Loading…</span>
+        </div>
+    </div>
+</details>
+
+<!-- Trusted Roots Management -->
+<details open id="trusted-roots-section">
+    <summary>
+        Trusted Roots
+        <span class="badge badge-info" id="roots-count-badge">Loading…</span>
+        {% if empty_set_active %}<span class="badge badge-danger">FAIL-CLOSED</span>{% endif %}
+    </summary>
+
+    <div id="banner-in-memory" class="banner banner-warning" style="display:none;">
+        &#9888; In-memory changes only — changes apply to this instance and are lost on restart.
+        Set <code>VVP_TRUSTED_ROOT_AIDS</code> and restart all replicas to persist.
+    </div>
+
+    <div id="banner-empty" class="banner banner-danger" {% if not empty_set_active %}style="display:none;"{% endif %}>
+        &#128683; No trusted roots configured — verifier is in <strong>fail-closed mode</strong>.
+        All credential chain validation will fail.
+    </div>
+
+    <table class="roots-table">
+        <thead>
+            <tr>
+                <th>AID</th>
+                <th>Label</th>
+                <th style="width:6rem;">Action</th>
+            </tr>
+        </thead>
+        <tbody id="roots-tbody">
+            {% if trusted_roots %}
+                {% for aid in trusted_roots %}
+                <tr>
+                    <td><code title="{{ aid }}">{{ aid[:20] }}…{{ aid[-4:] }}</code></td>
+                    <td>{{ known_root_labels.get(aid, '—') }}</td>
+                    <td><button class="danger" onclick="removeTrustedRoot('{{ aid }}')">Remove</button></td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="3" style="color:#c00;">No trusted roots configured</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <div class="admin-controls">
+        <input type="text" id="new-aid" placeholder="New AID (e.g. EDP1vH…)" style="width:28rem;" />
+        <button class="primary" onclick="addTrustedRoot()">Add Root</button>
+    </div>
+    <p style="margin-top:0.6rem;font-size:0.82rem;color:#666;">
+        Mutations require <code>VVP_ADMIN_TOKEN</code>. You will be prompted for the token on first use.
+    </p>
+</details>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// Admin token held in memory only — never persisted
+let _adminToken = null;
+
+function _getToken() {
+    if (!_adminToken) {
+        _adminToken = window.prompt('Enter VVP_ADMIN_TOKEN:');
+    }
+    return _adminToken;
+}
+
+function _authHeaders() {
+    const tok = _getToken();
+    if (!tok) return null;
+    return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok };
+}
+
+function showToast(msg, type) {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3500);
+}
+
+// Load service status on page load
+async function loadStatus() {
+    try {
+        const resp = await fetch('/healthz');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        document.getElementById('health-status').textContent = data.status === 'ok' ? '✓ Healthy' : '✗ Unhealthy';
+        const c = data.cache || {};
+        document.getElementById('cache-hits').textContent = c.hits ?? '—';
+        document.getElementById('cache-misses').textContent = c.misses ?? '—';
+        const sip = data.sip || {};
+        document.getElementById('sip-status').textContent = sip.running
+            ? '✓ ' + (sip.address || 'running')
+            : '✗ stopped';
+    } catch (e) {
+        document.getElementById('health-status').textContent = 'Error: ' + e.message;
+    }
+}
+
+function _renderRoots(data) {
+    const roots = data.trusted_roots || [];
+    const labels = data.known_roots || {};
+    document.getElementById('roots-count-badge').textContent = roots.length + ' root' + (roots.length !== 1 ? 's' : '');
+    document.getElementById('banner-empty').style.display = data.empty_set_active ? '' : 'none';
+    if (data._mutation_warning) {
+        document.getElementById('banner-in-memory').style.display = '';
+    }
+    const tbody = document.getElementById('roots-tbody');
+    if (roots.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color:#c00;">No trusted roots configured</td></tr>';
+        return;
+    }
+    tbody.innerHTML = roots.map(aid => {
+        const label = labels[aid] || '—';
+        const short = aid.length > 24 ? aid.slice(0, 20) + '…' + aid.slice(-4) : aid;
+        return `<tr>
+            <td><code title="${aid}">${short}</code></td>
+            <td>${label}</td>
+            <td><button class="danger" onclick="removeTrustedRoot('${aid}')">Remove</button></td>
+        </tr>`;
+    }).join('');
+}
+
+async function addTrustedRoot() {
+    const aid = document.getElementById('new-aid').value.trim();
+    if (!aid) { showToast('Enter an AID first', 'warning'); return; }
+    const hdrs = _authHeaders();
+    if (!hdrs) return;
+    try {
+        const resp = await fetch('/admin/trusted-roots/add', {
+            method: 'POST', headers: hdrs, body: JSON.stringify({ aid })
+        });
+        const data = await resp.json();
+        if (resp.status === 401) { _adminToken = null; showToast('Token rejected — try again', 'error'); return; }
+        if (resp.status === 503) { showToast(data.detail || 'Service unavailable', 'error'); return; }
+        if (!resp.ok) { showToast(data.detail || 'Failed', 'error'); return; }
+        document.getElementById('new-aid').value = '';
+        _renderRoots(data);
+        showToast('Trusted root added', 'success');
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+}
+
+async function removeTrustedRoot(aid) {
+    if (!confirm('Remove trusted root?\n\n' + aid)) return;
+    const hdrs = _authHeaders();
+    if (!hdrs) return;
+    try {
+        const resp = await fetch('/admin/trusted-roots/remove', {
+            method: 'POST', headers: hdrs, body: JSON.stringify({ aid })
+        });
+        const data = await resp.json();
+        if (resp.status === 401) { _adminToken = null; showToast('Token rejected — try again', 'error'); return; }
+        if (resp.status === 503) { showToast(data.detail || 'Service unavailable', 'error'); return; }
+        if (!resp.ok) { showToast(data.detail || 'Failed', 'error'); return; }
+        _renderRoots(data);
+        showToast('Trusted root removed', 'success');
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadStatus);
+</script>
+</body>
+</html>
