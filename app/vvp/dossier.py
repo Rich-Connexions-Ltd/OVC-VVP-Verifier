@@ -39,14 +39,12 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-import httpx
-
 from app.config import (
     DOSSIER_CACHE_MAX_ENTRIES,
     DOSSIER_CACHE_TTL_SECONDS,
-    DOSSIER_FETCH_TIMEOUT_SECONDS,
     DOSSIER_MAX_SIZE_BYTES,
 )
+from app.vvp.fetch import FetchError, safe_get
 from app.vvp.acdc import (
     ACDC,
     DossierDAG,
@@ -80,7 +78,7 @@ __all__ = [
 
 
 async def fetch_dossier(url: str) -> bytes:
-    """Fetch a dossier from *url* via async HTTP GET.
+    """Fetch a dossier from *url* via SSRF-safe HTTP GET.
 
     Parameters
     ----------
@@ -102,46 +100,10 @@ async def fetch_dossier(url: str) -> bytes:
         raise DossierFetchError("Dossier URL is empty")
 
     logger.debug("Fetching dossier from %s", url)
-
     try:
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(DOSSIER_FETCH_TIMEOUT_SECONDS),
-            follow_redirects=True,
-        ) as client:
-            response = await client.get(url)
-    except httpx.TimeoutException as exc:
-        raise DossierFetchError(
-            f"Dossier fetch timed out after {DOSSIER_FETCH_TIMEOUT_SECONDS}s "
-            f"for {url}"
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise DossierFetchError(
-            f"HTTP error fetching dossier from {url}: {exc}"
-        ) from exc
-    except Exception as exc:
-        raise DossierFetchError(
-            f"Unexpected error fetching dossier from {url}: {exc}"
-        ) from exc
-
-    if response.status_code < 200 or response.status_code >= 300:
-        raise DossierFetchError(
-            f"Dossier fetch returned HTTP {response.status_code} for {url}"
-        )
-
-    body = response.content
-    if len(body) > DOSSIER_MAX_SIZE_BYTES:
-        raise DossierFetchError(
-            f"Dossier response exceeds maximum size "
-            f"({len(body)} > {DOSSIER_MAX_SIZE_BYTES} bytes) for {url}"
-        )
-
-    if len(body) == 0:
-        raise DossierFetchError(f"Dossier response is empty for {url}")
-
-    logger.debug(
-        "Fetched dossier from %s: %d bytes", url, len(body)
-    )
-    return body
+        return await safe_get(url, max_size=DOSSIER_MAX_SIZE_BYTES)
+    except FetchError as exc:
+        raise DossierFetchError(str(exc)) from exc
 
 
 # ======================================================================

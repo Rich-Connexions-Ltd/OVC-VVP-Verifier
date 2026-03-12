@@ -36,6 +36,18 @@ ALLOW_PASSPORT_EXP_OMISSION: bool = os.getenv("VVP_ALLOW_PASSPORT_EXP_OMISSION",
 DOSSIER_FETCH_TIMEOUT_SECONDS: int = int(os.getenv("VVP_DOSSIER_FETCH_TIMEOUT", "5"))
 DOSSIER_MAX_SIZE_BYTES: int = int(os.getenv("VVP_DOSSIER_MAX_SIZE_BYTES", "1048576"))
 
+# Whether to allow HTTP (non-TLS) for external fetches. Dev/test only.
+ALLOW_HTTP: bool = os.getenv("VVP_ALLOW_HTTP", "false").lower() == "true"
+
+# Maximum response body size for all external HTTP fetches (default 10 MB).
+FETCH_MAX_SIZE_BYTES: int = int(os.getenv("VVP_FETCH_MAX_SIZE_BYTES", "10485760"))
+
+# Timeout for all external HTTP fetches (seconds).
+FETCH_TIMEOUT_SECONDS: float = float(os.getenv("VVP_FETCH_TIMEOUT", "10.0"))
+
+# TEL data source strategy: "witness-direct" (default) or "dossier-only".
+TEL_SOURCE: str = os.getenv("VVP_TEL_SOURCE", "witness-direct")
+
 
 def _parse_trusted_roots() -> frozenset[str]:
     env_value = os.getenv("VVP_TRUSTED_ROOT_AIDS", "")
