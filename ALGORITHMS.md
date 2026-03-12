@@ -76,10 +76,9 @@ The PASSporT is a compact-serialised JWT with three dot-separated base64url segm
   "dest": { "tn": ["+15559876543"] },
   "evd": "https://issuer.example.com/dossier/SAID.cesr",
   "exp": 1706000300,
-  "card": {
-    "brand_name": "Acme Corp",
-    "logo_url": "https://issuer.example.com/brand/logo.png"
-  }
+  "card": ["FN:Acme Corp", "TEL:+12025551234", "LOGO:https://issuer.example.com/brand/logo.png"],
+  "call-id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6@example.com",
+  "cseq": "314 INVITE"
 }
 ```
 
@@ -90,7 +89,9 @@ The PASSporT is a compact-serialised JWT with three dot-separated base64url segm
 | `dest` | Yes | Destination identity. Must contain `tn` array with one or more E.164 numbers. |
 | `evd` | No | Evidence URL. Also extracted from `attest.creds[0]` if prefixed with `"evd:"`. |
 | `exp` | No | Expiry timestamp. |
-| `card` | No | Rich call data / brand card object. |
+| `card` | No | RFC 6350 vCard property string array (e.g. `["FN:Acme Corp", "TEL:+12025551234"]`). Old dict format is ignored for backwards compatibility. |
+| `call-id` | No | SIP Call-ID value (max 256 chars). |
+| `cseq` | No | SIP CSeq value (max 64 chars). |
 
 ### Binding Rules (§5.2-§5.4)
 
@@ -158,6 +159,18 @@ E + base64url(blake3_256_hash)[0:43]
 ```
 
 This produces a 44-character string: 1 code character + 43 base64url characters (32 bytes of hash).
+
+### ACDC Canonical Field Ordering
+
+ACDC credentials use a different field ordering from KERI Key Event Log (KEL) events.  The ACDC-specific ordering, derived from keripy `SerderACDC` v1.0 `FieldDom`, is:
+
+```
+v, d, u, i, ri, s, a, A, e, r
+```
+
+Fields present in the credential but not in this ordering are appended in their original order after the canonical fields.  The version string size field (`v`) is updated to reflect the actual serialized byte length before hashing.
+
+This ordering differs from the alphabetical fallback used for unknown KERI event types, and must be applied specifically when serializing ACDC credentials (those without a `t` field) for SAID computation.  Using the wrong ordering produces a different hash and will cause SAID verification failures.
 
 ## CESR Encoding Basics
 
@@ -251,3 +264,29 @@ Each child link carries a `required` flag:
 
 - **Required children**: If a required child is INVALID, the parent is INVALID.
 - **Optional children**: If an optional child is INVALID, the parent may still be VALID (the child is informational).
+
+## Schema Registry
+
+The verifier maintains a static registry mapping credential type names to governance-approved schema SAIDs.
+
+### Supported Credential Types
+
+| Type | Description | Authority-bearing |
+|------|-------------|-------------------|
+| `QVI` | Qualified vLEI Issuer | Yes |
+| `LE` | Legal Entity vLEI | Yes |
+| `OOR_AUTH` | Official Organizational Role Authorization | Yes |
+| `OOR` | Official Organizational Role | Yes |
+| `ECR_AUTH` | Engagement Context Role Authorization | Yes |
+| `ECR` | Engagement Context Role | Yes |
+| `APE` | Authorized Person for Engagement (pending governance) | Yes |
+| `DE` | Delegated Entity | Yes |
+| `TNAlloc` | Telephone Number Allocation (base and extended) | Yes |
+| `BrandOwner` | Brand-owner credential (Provenant vCard array + logo hash format) | No (display-only) |
+| `ExtendedBrand` | Extended brand credential (legacy scalar-field, deprecated) | No (display-only) |
+| `VetterCert` | VVP VetterCert credential | Yes |
+| `VetterGov` | VVP VetterGov credential | Yes |
+
+### Brand Credentials
+
+`BrandOwner` and `ExtendedBrand` credentials are **display-only leaf nodes** in the credential chain.  They carry brand identity information (name, logo, etc.) for rich call display, but are not authority-bearing and do not participate in the authorization chain.  When encountered during chain validation, they are marked `VALID` with `required=False` and skipped for authorization purposes.
