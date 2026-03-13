@@ -81,10 +81,12 @@ def _build_trusted_roots_response(
 
 
 def _check_same_origin(request: Request) -> None:
+    from urllib.parse import urlparse
     origin = request.headers.get("origin")
     if origin:
-        host = str(request.base_url).rstrip("/")
-        if origin.rstrip("/") != host:
+        origin_host = urlparse(origin).netloc
+        request_host = request.headers.get("host", "")
+        if origin_host != request_host:
             raise HTTPException(status_code=403, detail="Cross-origin admin access not allowed")
 
 
