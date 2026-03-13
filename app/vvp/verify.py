@@ -768,8 +768,8 @@ async def _phase_8_check_revocation(
     2. **Stale cached revocation** — Use the cached status for this
        request (avoiding latency) but enqueue a background re-check
        so the next request sees updated data.
-    3. **No cache** — Perform an inline TEL check for all credentials
-       in the chain (synchronous, adds latency).
+    3. **No cache** — Enqueue a background TEL check and return
+       INDETERMINATE immediately so the call is never blocked.
 
     Parameters
     ----------
@@ -859,76 +859,29 @@ async def _phase_8_check_revocation(
             revocation_pending,
         )
 
-    # --- Mode 3: Inline TEL check ---
-    chain_info = _build_chain_info(dag)
-    if not chain_info:
-        return (
-            ClaimNode(
-                name="revocation_clear",
-                status=ClaimStatus.INDETERMINATE,
-                reasons=["No credentials to check for revocation"],
-            ),
-            False,
+    # --- Mode 3: No cache — enqueue background check, return INDETERMINATE ---
+    # TEL checks are NOT in the critical path. The first call after a cache miss
+    # always gets INDETERMINATE; subsequent calls see the result once the
+    # background task has populated the cache.
+    dossier_url = _resolve_dossier_url(dossier_url_override, passport, identity)
+    if dossier_url:
+        checker = get_revocation_checker()
+        await checker.enqueue(dossier_url)
+        logger.debug(
+            "No revocation cache — enqueued background TEL check for %s",
+            dossier_url[:60],
         )
+    else:
+        logger.debug("No revocation cache and no dossier URL — skipping TEL enqueue")
 
-    try:
-        result: ChainRevocationResult = await check_chain_revocation(chain_info)
-
-        if result.chain_status == CredentialStatus.REVOKED:
-            revoked = result.revoked_credentials
-            errors.append(make_error(
-                ErrorCode.CREDENTIAL_REVOKED,
-                f"Revoked credential(s): {', '.join(s[:16] for s in revoked)}",
-            ))
-            return (
-                ClaimNode(
-                    name="revocation_clear",
-                    status=ClaimStatus.INVALID,
-                    reasons=[
-                        f"Credential(s) revoked: {', '.join(s[:16] for s in revoked)}"
-                    ],
-                ),
-                False,
-            )
-
-        if result.chain_status == CredentialStatus.ACTIVE:
-            return (
-                ClaimNode(
-                    name="revocation_clear",
-                    status=ClaimStatus.VALID,
-                    evidence=["source=inline_tel"],
-                ),
-                False,
-            )
-
-        # UNKNOWN — could not determine status for all credentials.
-        reasons = ["Revocation status could not be determined"]
-        if result.errors:
-            reasons.extend(result.errors[:3])  # Limit to first 3 errors.
-
-        return (
-            ClaimNode(
-                name="revocation_clear",
-                status=ClaimStatus.INDETERMINATE,
-                reasons=reasons,
-            ),
-            False,
-        )
-
-    except Exception as exc:
-        logger.exception("Unexpected error during revocation check")
-        errors.append(make_error(
-            ErrorCode.INTERNAL_ERROR,
-            f"Revocation check error: {exc}",
-        ))
-        return (
-            ClaimNode(
-                name="revocation_clear",
-                status=ClaimStatus.INDETERMINATE,
-                reasons=[f"Revocation check error: {exc}"],
-            ),
-            False,
-        )
+    return (
+        ClaimNode(
+            name="revocation_clear",
+            status=ClaimStatus.INDETERMINATE,
+            reasons=["Revocation not yet checked — background check enqueued"],
+        ),
+        bool(dossier_url),
+    )
 
 
 def _phase_9_validate_authorization(
