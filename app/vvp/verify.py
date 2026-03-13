@@ -73,6 +73,7 @@ from app.vvp.models import (
     ErrorDetail,
     VerifyRequest,
     VerifyResponse,
+    _status_to_certainty,
     make_error,
     derive_overall_status,
 )
@@ -343,6 +344,7 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
         capabilities=dict(CAPABILITIES),
         brand_name=brand_name,
         signer_aid=signer_aid,
+        certainty=_status_to_certainty(overall_status),
         revocation_pending=revocation_pending,
         cache_hit=cache_hit,
     )
@@ -681,7 +683,8 @@ async def _phase_5_fetch_dossier(
         return None, None, None, errors, None, False
 
     try:
-        acdcs = parse_dossier(raw_bytes)
+        parse_result = parse_dossier(raw_bytes)
+        acdcs = parse_result.acdcs
     except DossierParseError as exc:
         errors.append(make_error(ErrorCode.DOSSIER_PARSE_FAILED, str(exc)))
         return None, None, None, errors, None, False

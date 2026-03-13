@@ -30,9 +30,23 @@ Only non-None values are included in the header dict.
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from app.sip.models import SIPRequest, SIPResponse
+
+
+_MAX_HEADER_VALUE_LEN = 256
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _sanitize_sip_header_value(value: str) -> Optional[str]:
+    """Strip ASCII control characters (0x00–0x1F and 0x7F) and truncate to 256 chars.
+
+    Returns None if the result is empty — callers should omit the header in that case.
+    """
+    cleaned = _CONTROL_CHARS.sub("", value).strip()
+    return cleaned[:_MAX_HEADER_VALUE_LEN] if cleaned else None
 
 
 # =============================================================================
@@ -183,10 +197,18 @@ def build_vvp_headers(verify_result) -> dict[str, str]:
         # ClaimStatus is an enum; use its string value.
         headers["X-VVP-Status"] = str(status.value) if hasattr(status, "value") else str(status)
 
-    # Brand name (from PASSporT card claim).
+    # Certainty: enum-constrained, no sanitization needed.
+    certainty = getattr(verify_result, "certainty", "none")
+    if certainty not in ("full", "partial", "none"):
+        certainty = "none"
+    headers["X-VVP-Certainty"] = certainty
+
+    # Brand name: sanitize before SIP header emission.
     brand_name = getattr(verify_result, "brand_name", None)
     if brand_name is not None:
-        headers["X-VVP-Brand-Name"] = brand_name
+        sanitized = _sanitize_sip_header_value(str(brand_name))
+        if sanitized:
+            headers["X-VVP-Brand-Name"] = sanitized
 
     # Brand logo URL (from PASSporT card claim).
     brand_logo_url = getattr(verify_result, "brand_logo_url", None)

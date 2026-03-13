@@ -1,5 +1,26 @@
 # Changelog
 
+## Sprint 84: Dossier TEL Event Filtering & INDETERMINATE Brand Policy — 2026-03-13
+
+### Bug Fixes
+- **KERI TEL events in dossier no longer cause INVALID**: Mixed CESR streams containing both ACDC10 credentials and KERI10 TEL `iss` events are now handled correctly. Previously, TEL events failed SAID validation when passed to `parse_acdc`, causing the call to be marked INVALID. TEL events are now classified via positive markers (`"t"` key or `"v"` starting with `"KERI10"`) and routed to a separate `tel_events` track in `DossierParseResult`.
+
+### New Features
+- **`certainty` field**: `VerifyResponse` now includes `certainty: Literal["full","partial","none"]` — `"full"` when VALID, `"partial"` when INDETERMINATE, `"none"` when INVALID.
+- **`X-VVP-Certainty` SIP header**: New SIP extension header emitted alongside `X-VVP-Status`.
+- **SIP header sanitization**: `X-VVP-Brand-Name` is now sanitized before emission — all ASCII control characters (0x00–0x1F, 0x7F) are stripped and values are truncated to 256 characters to prevent header injection.
+- **TEL event retention**: Parsed KERI TEL events are retained in `DossierParseResult.tel_events` for future inline revocation evaluation.
+
+### Files Changed
+- `app/vvp/dossier.py` — `DossierParseResult` dataclass; `_is_keri_event()` classifier; Strategy 1/2/3 updated to return `DossierParseResult`; Strategy 3 TEL bifurcation
+- `app/vvp/models.py` — `certainty: Literal[...]` field on `VerifyResponse`; `_status_to_certainty()` helper; `Literal` import
+- `app/vvp/verify.py` — Unpack `DossierParseResult.acdcs`; populate `certainty`; import `_status_to_certainty`
+- `app/sip/builder.py` — `_sanitize_sip_header_value()`; `X-VVP-Certainty` header; sanitized brand name emission
+- `tests/test_dossier_tel_filtering.py` — New: 12 tests for `_is_keri_event()` and `parse_dossier` TEL filtering
+- `tests/test_certainty.py` — New: 18 tests for `_status_to_certainty()`, `certainty` field, `X-VVP-Certainty` header, sanitization
+
+**Commit:** *(pending)*
+
 ## v0.2.0 — 2026-03-12
 
 ### Bug Fixes

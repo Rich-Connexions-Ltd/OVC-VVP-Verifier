@@ -65,11 +65,56 @@ __all__ = [
     "fetch_dossier",
     "parse_dossier",
     "build_and_validate_dossier",
+    "DossierParseResult",
     "CachedDossier",
     "DossierCache",
     "get_dossier_cache",
     "reset_dossier_cache",
 ]
+
+
+# ======================================================================
+# KERI/TEL event classification
+# ======================================================================
+
+
+def _is_keri_event(obj: dict) -> bool:
+    """Return True iff *obj* is positively identified as a KERI protocol event.
+
+    Uses **positive markers only**.  Objects that are not positively
+    identified as KERI are treated as potential ACDCs and attempted via
+    :func:`parse_acdc` (which will fail with a validation error if the
+    object is malformed, preserving normal error-surfacing behaviour).
+
+    Discriminators (any one sufficient):
+
+    1. ``"t"`` key present — KERI events always carry a message-type field;
+       ACDC credentials never use ``"t"`` (normative per KERI spec).
+    2. ``"v"`` starts with ``"KERI10"`` — KERI versioned messages use
+       ``KERI10`` prefix; ACDC streams use ``ACDC10``.
+    """
+    if "t" in obj:
+        return True
+    if isinstance(obj.get("v"), str) and obj["v"].startswith("KERI10"):
+        return True
+    return False
+
+
+@dataclass
+class DossierParseResult:
+    """Result of parsing a dossier CESR stream.
+
+    Attributes
+    ----------
+    acdcs : list[ACDC]
+        Parsed ACDC credential objects.
+    tel_events : list[dict]
+        KERI Transaction Event Log events found in the stream.
+        Retained for future inline revocation evaluation; not consumed
+        by the current verification pipeline.
+    """
+    acdcs: List[ACDC]
+    tel_events: List[dict] = field(default_factory=list)
 
 
 # ======================================================================
@@ -255,8 +300,8 @@ def _parse_provenant_wrapper(data: dict) -> List[ACDC]:
     return _parse_json_array(creds)
 
 
-def parse_dossier(raw: bytes) -> List[ACDC]:
-    """Parse raw dossier bytes into a list of ACDC credentials.
+def parse_dossier(raw: bytes) -> DossierParseResult:
+    """Parse raw dossier bytes into a structured parse result.
 
     Format detection strategy:
 
@@ -266,7 +311,10 @@ def parse_dossier(raw: bytes) -> List[ACDC]:
        a. Provenant wrapper (has ``"credentials"`` key).
        b. Bare single ACDC.
     3. **CESR / mixed stream** — bracket-counting extraction of embedded
-       JSON objects, each parsed as a potential ACDC.
+       JSON objects.  Objects positively identified as KERI/TEL events
+       (via :func:`_is_keri_event`) are separated into ``tel_events``
+       and retained for future inline revocation evaluation rather than
+       being passed to :func:`parse_acdc`.
 
     Parameters
     ----------
@@ -275,8 +323,8 @@ def parse_dossier(raw: bytes) -> List[ACDC]:
 
     Returns
     -------
-    list[ACDC]
-        Parsed ACDC credentials.
+    DossierParseResult
+        Parsed ACDC credentials and retained KERI/TEL events.
 
     Raises
     ------
@@ -317,7 +365,7 @@ def parse_dossier(raw: bytes) -> List[ACDC]:
                 logger.debug(
                     "Parsed %d ACDCs from JSON array dossier", len(acdcs)
                 )
-                return acdcs
+                return DossierParseResult(acdcs=acdcs, tel_events=[])
 
         raise DossierParseError(
             "Dossier JSON array contained no valid ACDC credentials"
@@ -341,7 +389,7 @@ def parse_dossier(raw: bytes) -> List[ACDC]:
                     logger.debug(
                         "Parsed %d ACDCs from Provenant wrapper", len(acdcs)
                     )
-                    return acdcs
+                    return DossierParseResult(acdcs=acdcs, tel_events=[])
                 # Wrapper present but no valid creds — fall through.
 
             # 2b. Bare single ACDC (has "d", "i", "s", "a" fields).
@@ -349,7 +397,7 @@ def parse_dossier(raw: bytes) -> List[ACDC]:
                 try:
                     acdc = parse_acdc(data)
                     logger.debug("Parsed single ACDC dossier: %s", acdc.said)
-                    return [acdc]
+                    return DossierParseResult(acdcs=[acdc], tel_events=[])
                 except ValueError as exc:
                     logger.debug("Single ACDC parse failed: %s", exc)
 
@@ -357,28 +405,32 @@ def parse_dossier(raw: bytes) -> List[ACDC]:
     # Strategy 3: CESR / mixed stream — bracket-counting extraction
     # ------------------------------------------------------------------
     json_objects = _extract_json_objects(stripped)
+    tel_events: List[dict] = []
     if json_objects:
         for obj in json_objects:
-            # Each extracted object might be an ACDC.
             if not all(k in obj for k in ("d", "i", "s")):
-                logger.debug(
-                    "Skipping non-ACDC JSON object (missing d/i/s fields)"
-                )
+                logger.debug("Skipping non-credential object (missing d/i/s)")
+                continue
+            if _is_keri_event(obj):
+                tel_events.append(obj)
                 continue
             try:
                 acdcs.append(parse_acdc(obj))
             except ValueError as exc:
-                logger.debug("Failed to parse extracted ACDC: %s", exc)
+                logger.debug("ACDC parse failed: %s", exc)
 
-    if acdcs:
-        logger.debug(
-            "Parsed %d ACDCs from CESR/mixed stream dossier", len(acdcs)
+    if tel_events:
+        logger.info(
+            "Dossier contains %d inline TEL events (retained)", len(tel_events)
         )
-        return acdcs
-
-    raise DossierParseError(
-        "No valid ACDC credentials found in dossier payload"
+    if not acdcs:
+        raise DossierParseError(
+            "No valid ACDC credentials found in dossier payload"
+        )
+    logger.debug(
+        "Parsed %d ACDCs from CESR/mixed stream dossier", len(acdcs)
     )
+    return DossierParseResult(acdcs=acdcs, tel_events=tel_events)
 
 
 # ======================================================================

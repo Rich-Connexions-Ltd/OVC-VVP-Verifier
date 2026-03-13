@@ -3,7 +3,7 @@
 """VVP Verifier API models per §3.2, §4.1-§4.3."""
 
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -114,6 +114,22 @@ CAPABILITIES: Dict[str, str] = {
 }
 
 
+def _status_to_certainty(
+    status: ClaimStatus,
+) -> Literal["full", "partial", "none"]:
+    """Map verification status to public certainty indicator.
+
+    full    — VALID: all claims verified
+    partial — INDETERMINATE: structural checks passed, Tier 2 resolution unavailable
+    none    — INVALID: one or more required claims failed
+    """
+    if status == ClaimStatus.VALID:
+        return "full"
+    if status == ClaimStatus.INDETERMINATE:
+        return "partial"
+    return "none"
+
+
 class VerifyResponse(BaseModel):
     request_id: str
     overall_status: ClaimStatus
@@ -122,6 +138,7 @@ class VerifyResponse(BaseModel):
     capabilities: Dict[str, str] = Field(default_factory=lambda: dict(CAPABILITIES))
     brand_name: Optional[str] = None
     signer_aid: Optional[str] = None
+    certainty: Literal["full", "partial", "none"] = "none"
     revocation_pending: bool = False
     cache_hit: bool = False
 
