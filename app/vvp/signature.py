@@ -67,6 +67,22 @@ def verify_passport_signature(passport: "Passport") -> None:
     kid: str = passport.header.kid
 
     # ------------------------------------------------------------------
+    # If kid is an OOBI URL, extract the AID from the path.
+    # OOBI format: https://<witness>/oobi/<AID>/controller
+    # ------------------------------------------------------------------
+    if kid.startswith("http://") or kid.startswith("https://"):
+        from urllib.parse import urlparse
+        path_parts = urlparse(kid).path.split("/")
+        # Find the segment immediately after "oobi"
+        try:
+            oobi_idx = path_parts.index("oobi")
+            kid = path_parts[oobi_idx + 1]
+        except (ValueError, IndexError):
+            raise SignatureInvalidError(
+                f"kid is a URL but does not contain a recognisable OOBI path: '{passport.header.kid}'"
+            )
+
+    # ------------------------------------------------------------------
     # Determine AID type from the CESR prefix character
     # ------------------------------------------------------------------
     prefix = kid[0] if kid else ""
@@ -80,8 +96,9 @@ def verify_passport_signature(passport: "Passport") -> None:
                 f"Failed to decode Ed25519 verkey from AID: {exc}"
             ) from exc
 
-    elif prefix == "D" and len(kid) == _ED25519_AID_LEN:
-        # Transferable Ed25519 — requires KEL resolution (Tier 2).
+    elif prefix in ("D", "E") and len(kid) == _ED25519_AID_LEN:
+        # Transferable AID (D = transferable Ed25519, E = self-addressing) —
+        # requires KEL resolution (Tier 2).
         err = SignatureInvalidError(
             "Transferable AID requires KEL resolution (Tier 2) "
             "which is not supported by this verifier"
