@@ -86,7 +86,7 @@ from app.vvp.exceptions import (
 )
 from app.vvp.header import VVPIdentity, parse_vvp_identity
 from app.vvp.passport import Passport, parse_passport, validate_passport_binding
-from app.vvp.signature import verify_passport_signature
+from app.vvp.signature import verify_passport_signature, verify_passport_signature_auto
 from app.vvp.dossier import (
     CachedDossier,
     build_and_validate_dossier,
@@ -216,7 +216,7 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
     # ==================================================================
 
     if not early_terminate and passport is not None:
-        signature_claim = _phase_4_verify_signature(passport, errors)
+        signature_claim = await _phase_4_verify_signature(passport, errors)
         if signature_claim.status == ClaimStatus.INVALID:
             early_terminate = True
     elif not early_terminate:
@@ -518,15 +518,14 @@ def _phase_3_validate_binding(
         )
 
 
-def _phase_4_verify_signature(
+async def _phase_4_verify_signature(
     passport: Passport,
     errors: List[ErrorDetail],
 ) -> ClaimNode:
     """Phase 4: Verify the Ed25519 signature on the PASSporT.
 
-    Handles the special case where a transferable AID (``D``-prefix)
-    requires KEL resolution that is not available in Tier 1 — this
-    produces INDETERMINATE rather than INVALID.
+    Automatically routes to Tier 1 (B-prefix) or Tier 2 (D/E-prefix).
+    Tier 2 resolves key state at reference time T via KEL/OOBI.
 
     Parameters
     ----------
@@ -540,8 +539,14 @@ def _phase_4_verify_signature(
     ClaimNode
         The ``signature_valid`` claim node.
     """
+    from app.vvp.keri.exceptions import (
+        KeriError,
+        ResolutionFailedError as KeriResolutionError,
+        KELChainInvalidError,
+    )
+
     try:
-        verify_passport_signature(passport)
+        await verify_passport_signature_auto(passport)
         return ClaimNode(
             name="signature_valid",
             status=ClaimStatus.VALID,
@@ -550,7 +555,7 @@ def _phase_4_verify_signature(
     except SignatureInvalidError as exc:
         code = getattr(exc, "code", None)
         if code == "KERI_RESOLUTION_FAILED":
-            # Transferable AID — cannot verify in Tier 1 but not invalid.
+            # Transferable AID — KEL resolution unavailable/disabled.
             errors.append(make_error(
                 ErrorCode.KERI_RESOLUTION_FAILED,
                 str(exc),
@@ -572,6 +577,39 @@ def _phase_4_verify_signature(
                 reasons=[str(exc)],
                 evidence=[f"kid={passport.header.kid[:20]}..."],
             )
+    except KeriResolutionError as exc:
+        # Tier 2 transient resolution failure → INDETERMINATE
+        errors.append(make_error(
+            ErrorCode.KERI_RESOLUTION_FAILED,
+            str(exc),
+        ))
+        return ClaimNode(
+            name="signature_valid",
+            status=ClaimStatus.INDETERMINATE,
+            reasons=[str(exc)],
+            evidence=[f"kid={passport.header.kid[:20]}..."],
+        )
+    except KELChainInvalidError as exc:
+        # Tier 2 chain validation failure → INVALID
+        errors.append(make_error(
+            ErrorCode.KERI_STATE_INVALID,
+            str(exc),
+        ))
+        return ClaimNode(
+            name="signature_valid",
+            status=ClaimStatus.INVALID,
+            reasons=[str(exc)],
+            evidence=[f"kid={passport.header.kid[:20]}..."],
+        )
+    except KeriError as exc:
+        # Other KERI errors → map by error code
+        errors.append(make_error(exc.code, str(exc)))
+        return ClaimNode(
+            name="signature_valid",
+            status=ClaimStatus.INVALID,
+            reasons=[str(exc)],
+            evidence=[f"kid={passport.header.kid[:20]}..."],
+        )
     except Exception as exc:
         logger.exception("Unexpected error verifying PASSporT signature")
         errors.append(make_error(

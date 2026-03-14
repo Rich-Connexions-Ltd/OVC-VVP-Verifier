@@ -130,7 +130,7 @@ class TestCapabilities:
 
     def test_capabilities_valid_values(self):
         """Each capability value should be one of the allowed status strings."""
-        allowed_values = {"implemented", "not_implemented", "rejected"}
+        allowed_values = {"implemented", "not_implemented", "rejected", "tier2_required"}
         resp = VerifyResponse(
             request_id="req-caps3",
             overall_status=ClaimStatus.VALID,
@@ -316,7 +316,8 @@ class TestErrorCode:
             "PASSPORT_FORBIDDEN_ALG", "PASSPORT_SIG_INVALID",
             "ACDC_SAID_MISMATCH", "ACDC_PROOF_MISSING",
             "DOSSIER_URL_MISSING", "DOSSIER_FETCH_FAILED", "DOSSIER_PARSE_FAILED",
-            "DOSSIER_GRAPH_INVALID", "KERI_RESOLUTION_FAILED",
+            "DOSSIER_GRAPH_INVALID", "KERI_RESOLUTION_FAILED", "KERI_STATE_INVALID",
+            "VVP_OOBI_CONTENT_INVALID",
             "CREDENTIAL_REVOKED", "AUTHORIZATION_FAILED", "TN_RIGHTS_INVALID",
             "INTERNAL_ERROR",
         }

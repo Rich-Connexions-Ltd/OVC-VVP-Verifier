@@ -31,8 +31,23 @@ def reset_store():
 
 @pytest.fixture()
 def client():
-    from app.main import app
-    return TestClient(app)
+    import app.config as cfg
+    import app.main as main_mod
+    from app.admin import router as admin_router
+
+    # Ensure admin router is mounted for tests (VVP_ADMIN_ENABLED defaults false).
+    original = cfg.VVP_ADMIN_ENABLED
+    cfg.VVP_ADMIN_ENABLED = True
+
+    # Check if admin routes already mounted by looking for the path.
+    admin_paths = {getattr(r, "path", "") for r in main_mod.app.routes}
+    if "/admin/trusted-roots" not in admin_paths:
+        main_mod.app.include_router(admin_router, prefix="/admin")
+
+    try:
+        yield TestClient(main_mod.app)
+    finally:
+        cfg.VVP_ADMIN_ENABLED = original
 
 
 def _auth(token="test-token"):

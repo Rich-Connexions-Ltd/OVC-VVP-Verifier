@@ -38,6 +38,8 @@ class ErrorCode(str, Enum):
     DOSSIER_PARSE_FAILED = "DOSSIER_PARSE_FAILED"
     DOSSIER_GRAPH_INVALID = "DOSSIER_GRAPH_INVALID"
     KERI_RESOLUTION_FAILED = "KERI_RESOLUTION_FAILED"
+    KERI_STATE_INVALID = "KERI_STATE_INVALID"
+    VVP_OOBI_CONTENT_INVALID = "VVP_OOBI_CONTENT_INVALID"
     CREDENTIAL_REVOKED = "CREDENTIAL_REVOKED"
     AUTHORIZATION_FAILED = "AUTHORIZATION_FAILED"
     TN_RIGHTS_INVALID = "TN_RIGHTS_INVALID"
@@ -100,8 +102,8 @@ class VerifyRequest(BaseModel):
 
 CAPABILITIES: Dict[str, str] = {
     "signature_tier1_nontransferable": "implemented",
-    "signature_tier1_transferable": "rejected",
-    "signature_tier2": "not_implemented",
+    "signature_tier1_transferable": "tier2_required",
+    "signature_tier2": "implemented",
     "dossier_validation": "implemented",
     "acdc_chain": "implemented",
     "revocation": "implemented",

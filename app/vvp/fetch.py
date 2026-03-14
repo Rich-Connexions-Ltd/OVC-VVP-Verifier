@@ -28,12 +28,18 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.config import ALLOW_HTTP, FETCH_MAX_SIZE_BYTES, FETCH_TIMEOUT_SECONDS
+from app.config import (
+    ALLOW_HTTP,
+    FETCH_MAX_SIZE_BYTES,
+    FETCH_TIMEOUT_SECONDS,
+    VVP_ALLOWED_FETCH_ORIGINS,
+)
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "FetchError",
+    "authorize_destination",
     "safe_get",
     "validate_url",
 ]
@@ -75,6 +81,33 @@ def validate_url(url: str) -> None:
         raise FetchError(f"URL must not contain credentials: {url}")
 
 
+def authorize_destination(url: str) -> None:
+    """Reject URLs whose origin is not in the operator-controlled allowlist.
+
+    This is NOT an SSRF check — it is destination authorization. SSRF
+    protection is handled separately by ``validate_url()`` and the
+    transport layer.
+
+    Raises :class:`FetchError` if origin is not in
+    ``VVP_ALLOWED_FETCH_ORIGINS``.
+
+    Normalization:
+    - Hostname is lowercased
+    - Port defaults to 443 for https, 80 for http (scheme-default)
+    - Comparison is exact ``host:port`` match after normalization
+    """
+    if not VVP_ALLOWED_FETCH_ORIGINS:
+        raise FetchError("No allowed fetch origins configured (fail-closed)")
+
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    origin = f"{hostname}:{port}"
+
+    if origin not in VVP_ALLOWED_FETCH_ORIGINS:
+        raise FetchError(f"Destination not authorized: {origin}")
+
+
 async def safe_get(
     url: str,
     *,
@@ -110,6 +143,7 @@ async def safe_get(
         size-limit violations.
     """
     validate_url(url)
+    authorize_destination(url)
 
     _timeout = timeout if timeout is not None else FETCH_TIMEOUT_SECONDS
     _max = max_size if max_size is not None else FETCH_MAX_SIZE_BYTES

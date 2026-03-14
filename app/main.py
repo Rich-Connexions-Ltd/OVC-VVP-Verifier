@@ -81,7 +81,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from app.config import HTTP_HOST, HTTP_PORT, SIP_HOST, SIP_PORT, LOG_LEVEL, get_trusted_roots_current
+from app.config import HTTP_HOST, HTTP_PORT, SIP_HOST, SIP_PORT, LOG_LEVEL, VVP_ADMIN_ENABLED, get_trusted_roots_current
 from app.vvp.models import CAPABILITIES, VerifyRequest, VerifyResponse
 from app.vvp.verify import verify
 from app.vvp.cache import get_verification_cache
@@ -264,7 +264,9 @@ _TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 # --- Admin router (Sprint 83: trusted roots management) ---
-app.include_router(admin_router, prefix="/admin")
+# Gated behind VVP_ADMIN_ENABLED (fail-closed: disabled by default).
+if VVP_ADMIN_ENABLED:
+    app.include_router(admin_router, prefix="/admin")
 
 # Module-level logger (configured properly after lifespan runs).
 logger = logging.getLogger("vvp.main")
@@ -501,6 +503,8 @@ async def index(request: Request) -> HTMLResponse:
 )
 async def admin_ui(request: Request) -> HTMLResponse:
     """Serve the admin dashboard page."""
+    if not VVP_ADMIN_ENABLED:
+        return HTMLResponse(content="<h1>Admin UI not available</h1>", status_code=404)
     template_path = _TEMPLATES_DIR / "admin.html"
     if template_path.exists():
         roots = get_trusted_roots_current()

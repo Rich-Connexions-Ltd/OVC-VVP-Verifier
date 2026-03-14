@@ -11,8 +11,8 @@ This is a **subset implementation** of the VVP specification. Every `VerifyRespo
 | Capability | Status |
 |-----------|--------|
 | `signature_tier1_nontransferable` | `implemented` — Ed25519 non-transferable AIDs |
-| `signature_tier1_transferable` | `rejected` — fail-closed with INDETERMINATE |
-| `signature_tier2` | `not_implemented` |
+| `signature_tier1_transferable` | `tier2_required` — requires Tier 2 KEL resolution |
+| `signature_tier2` | `implemented` — KEL resolution for transferable AIDs |
 | `dossier_validation` | `implemented` |
 | `acdc_chain` | `implemented` |
 | `revocation` | `implemented` |
@@ -89,7 +89,7 @@ The verifier implements a **9-phase verification pipeline**:
 1. **Parse VVP-Identity** — Decode and validate the identity header
 2. **Parse PASSporT** — Parse and validate the JWT structure
 3. **Bind** — Cross-validate identity ↔ PASSporT fields
-4. **Verify Signature** — Ed25519 (Tier 1 non-transferable only)
+4. **Verify Signature** — Ed25519 (Tier 1 non-transferable + Tier 2 transferable via KEL)
 5. **Fetch Dossier** — Retrieve the ACDC credential dossier
 6. **Validate DAG** — Verify the credential graph structure
 7. **Verify ACDC Chain** — Validate each credential (SAID, signatures)
@@ -119,6 +119,11 @@ All configuration is via environment variables:
 | `VVP_DOSSIER_CACHE_MAX_SIZE` | `500` | Dossier cache max entries |
 | `VVP_TRUSTED_ROOT_AIDS` | | Comma-separated list of trusted root AIDs |
 | `VVP_WITNESS_URLS` | | Comma-separated witness URLs for TEL queries |
+| `VVP_TIER2_KEL_ENABLED` | `true` | Enable Tier 2 transferable AID verification |
+| `VVP_KEY_STATE_FRESHNESS_SECONDS` | `120` | Key state cache freshness window |
+| `VVP_OOBI_TIMEOUT_SECONDS` | `5` | OOBI fetch timeout |
+| `VVP_ALLOWED_FETCH_ORIGINS` | | Comma-separated `host:port` allowlist for outbound fetches |
+| `VVP_ADMIN_ENABLED` | `false` | Enable admin UI and endpoints (fail-closed) |
 
 ## Algorithms
 

@@ -167,6 +167,44 @@ TEL_CLIENT_TIMEOUT_SECONDS: float = float(os.getenv("VVP_TEL_CLIENT_TIMEOUT", "1
 LOG_LEVEL: str = os.getenv("VVP_LOG_LEVEL", "INFO")
 LOG_FORMAT: str = os.getenv("VVP_LOG_FORMAT", "json")
 
+# =============================================================================
+# TIER 2 KEL RESOLUTION (Sprint 85)
+# =============================================================================
+
+# Feature gate: set to true to enable Tier 2 (transferable AID) verification.
+VVP_TIER2_KEL_ENABLED: bool = os.getenv("VVP_TIER2_KEL_ENABLED", "true").lower() == "true"
+
+# Key state cache freshness window (seconds). Unbounded cache entries older
+# than this are considered stale and force an OOBI re-fetch.
+VVP_KEY_STATE_FRESHNESS_SECONDS: float = float(
+    os.getenv("VVP_KEY_STATE_FRESHNESS_SECONDS", "120.0")
+)
+
+# OOBI fetch timeout (seconds). Passed to safe_get() for OOBI requests.
+VVP_OOBI_TIMEOUT_SECONDS: float = float(
+    os.getenv("VVP_OOBI_TIMEOUT_SECONDS", "5.0")
+)
+
+# Admin endpoints enabled (fail-closed: disabled by default).
+VVP_ADMIN_ENABLED: bool = os.getenv("VVP_ADMIN_ENABLED", "false").lower() == "true"
+
+
+def _parse_allowed_fetch_origins() -> frozenset[str]:
+    """Parse VVP_ALLOWED_FETCH_ORIGINS into a frozenset of 'host:port' entries.
+
+    Empty default = fail-closed (all fetches rejected until configured).
+    """
+    env = os.getenv("VVP_ALLOWED_FETCH_ORIGINS", "")
+    if not env.strip():
+        return frozenset()
+    return frozenset(o.strip().lower() for o in env.split(",") if o.strip())
+
+
+# Destination allowlist for outbound fetches (OOBI, dossier).
+# Format: comma-separated "host:port" entries.
+# Empty = fail-closed (all fetches rejected).
+VVP_ALLOWED_FETCH_ORIGINS: frozenset[str] = _parse_allowed_fetch_origins()
+
 
 # =============================================================================
 # CONFIG FINGERPRINT (for cache invalidation)

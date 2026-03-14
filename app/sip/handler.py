@@ -45,6 +45,43 @@ from app.vvp.models import VerifyRequest
 logger = logging.getLogger(__name__)
 
 
+def _strip_stir_params(identity_value: str) -> str:
+    """Strip RFC 8224 STIR parameters from a SIP Identity header value.
+
+    The Identity header per RFC 8224 may carry the PASSporT JWT followed
+    by semicolon-delimited parameters::
+
+        <JWT>;info=<https://cert.example.com>;alg=ES256;ppt=shaken
+
+    This function extracts only the JWT portion.  Both ``ppt=vvp`` and
+    ``ppt=shaken`` are accepted for interoperability.
+
+    Parameters
+    ----------
+    identity_value : str
+        The raw value of the SIP Identity header.
+
+    Returns
+    -------
+    str
+        The JWT string, stripped of any STIR parameters.
+    """
+    value = identity_value.strip()
+
+    # If the value starts with an angle bracket, it may be in
+    # header-field-value form: <JWT>;param=value
+    # Strip angle brackets first if present.
+    if value.startswith("<") and ">" in value:
+        end = value.index(">")
+        value = value[1:end]
+
+    # Split on semicolons — JWT is the first segment
+    if ";" in value:
+        value = value.split(";")[0].strip()
+
+    return value
+
+
 async def handle_invite(
     request: SIPRequest,
     addr: tuple[str, int],
@@ -86,6 +123,12 @@ async def handle_invite(
         return build_error_response(
             request, 400, "Bad Request - Missing Identity/P-VVP-Passport header"
         )
+
+    # Strip RFC 8224 STIR parameters from the Identity header value.
+    # The Identity header may include parameters after the JWT:
+    #   Identity: <JWT>;info=<https://...>;alg=ES256;ppt=shaken
+    # We need only the JWT portion for VVP verification.
+    passport_jwt = _strip_stir_params(passport_jwt)
 
     # VVP-Identity is a private extension header carrying the base64url
     # encoded VVP identity JSON object.

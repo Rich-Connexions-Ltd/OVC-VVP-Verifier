@@ -138,6 +138,63 @@ Total length: 44 characters (1 prefix + 43 base64url characters = 32 raw bytes +
 
 The CESR decoding reverses this: strip the `B` prefix, pad to 44 base64url characters, decode to 33 bytes, and discard the leading code byte to obtain the 32-byte Ed25519 public key.
 
+## Tier 2 KEL Resolution (Transferable AIDs)
+
+Transferable AIDs (D-prefix, E-prefix) do not directly encode the verification key. Instead, the current key state must be resolved from the Key Event Log (KEL).
+
+### AID Routing
+
+The verifier routes signature verification based on AID prefix:
+
+| Prefix | Type | Verification |
+|--------|------|-------------|
+| `B` | Non-transferable | Tier 1: Direct key decode from AID |
+| `D` | Ed25519 transferable | Tier 2: KEL resolution required |
+| `E` | Blake3-256 self-addressing | Tier 2: KEL resolution required |
+
+### KEL Resolution Process
+
+1. **OOBI Dereference**: Fetch the identifier's KEL from a known OOBI URL. The OOBI URL is derived from the `kid` field (AID) and the configured witness URLs.
+
+2. **KEL Parsing**: Parse the event stream (JSON or CESR) into ordered events:
+   - `icp` (inception) — establishes the identifier with initial keys
+   - `rot` (rotation) — updates signing keys, next key commitments
+   - `ixn` (interaction) — non-establishment events (anchors, seals)
+   - `dip` (delegated inception) — like `icp` but with delegator
+   - `drt` (delegated rotation) — like `rot` but with delegator
+
+3. **Chain Validation**:
+   - First event must be `icp` or `dip` (inception)
+   - Sequence numbers must be contiguous (0, 1, 2, ...)
+   - Prior digest chain: each event's `p` field must match the SAID of the preceding event
+   - SAID self-verification: each event's `d` field must match the computed SAID
+   - Inception self-signature: the first event's signature must verify against its own `k` (signing keys)
+
+4. **Temporal Key State**: Find the signing keys in effect at reference time T by walking the KEL and finding the most recent establishment event (icp/rot/dip/drt) whose timestamp is ≤ T.
+
+5. **Signature Verification**: Verify the PASSporT signature against the resolved key state.
+
+### Key State Cache
+
+Resolved key states are cached with a range-based validity model:
+
+- Each cache entry has a validity window `[valid_from, valid_until)`
+- Entries older than `VVP_KEY_STATE_FRESHNESS_SECONDS` (default 120s) trigger a re-fetch
+- Time-indexed lookup finds the cache entry whose validity window contains the query time
+- LRU eviction with configurable max entries
+
+### Delegation Chain Resolution
+
+Delegated identifiers (dip/drt events) require authorization from their delegator. The verifier resolves delegation chains recursively:
+
+1. Extract delegator AID from inception event's `di` field
+2. Resolve delegator's KEL via OOBI
+3. Validate delegator authorized the delegation (anchor seal in `ixn` event)
+4. If delegator is also delegated, recurse (max depth: 5)
+5. Terminate when a non-delegated root is found
+
+Cycle detection prevents infinite recursion. The chain is validated from leaf to root.
+
 ## SAID Computation (Blake3-256)
 
 Self-Addressing Identifiers (SAIDs) provide content-addressable integrity for ACDC credentials.
