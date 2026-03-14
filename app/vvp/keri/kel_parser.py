@@ -344,6 +344,9 @@ def _decode_keri_key(key_str: str) -> bytes:
     code = key_str[0]
 
     if code in ("B", "D"):
+        # CESR binary-domain encoding: keys use lead_byte + material bytes,
+        # all base64url-encoded together as a single 44-char string.
+        # Decode the full string → 33 bytes, check lead byte, strip it.
         try:
             full_decoded = base64.urlsafe_b64decode(key_str)
         except Exception as e:
@@ -351,9 +354,11 @@ def _decode_keri_key(key_str: str) -> bytes:
 
         if len(full_decoded) == 33:
             lead_byte = full_decoded[0]
+            # CESR standard lead bytes: 0x04 for B-prefix, 0x0c for D-prefix
             if lead_byte in (0x04, 0x0c):
                 return full_decoded[1:]
             else:
+                # Legacy/text-domain format: strip code char, decode rest
                 key_b64 = key_str[1:]
                 padded = key_b64 + "=" * (-len(key_b64) % 4)
                 try:

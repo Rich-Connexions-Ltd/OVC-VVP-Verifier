@@ -165,21 +165,16 @@ def decode_aid_verkey(aid: str) -> bytes:
                 f"Non-transferable Ed25519 AID must be "
                 f"{_NON_TRANS_ED25519_LEN} chars, got {len(aid)}"
             )
-        # The key material is the remaining 43 chars after the 1-char code.
-        # Together with the code char, the full 44-char string encodes
-        # 33 bytes (264 bits via 44 * 6 = 264 bits).  The first two bits
-        # (from the code character 'B' = 1 = 0b000001) are derivation
-        # code bits; the remaining 256 bits are the raw public key.
-        #
-        # Decoding the full 44-char string as base64url yields 33 bytes.
-        # The first byte contains the code bits; bytes [1:] are the key.
+        # CESR binary-domain encoding for 1-char codes: the full 44-char
+        # string base64url-decodes to 33 bytes where byte 0 is the lead byte
+        # (0x04 for B-prefix) and bytes 1-32 are the raw Ed25519 public key.
         raw = _b64url_decode(aid)
         if len(raw) < _ED25519_KEY_SIZE:
             raise CESRDecodeError(
                 f"Decoded AID too short: expected at least "
                 f"{_ED25519_KEY_SIZE} key bytes, got {len(raw)} total bytes"
             )
-        # Take the last 32 bytes as the public key (code bits are leading)
+        # Skip the lead byte — the last 32 bytes are the raw public key
         verkey = raw[-_ED25519_KEY_SIZE:]
         return verkey
 
@@ -250,15 +245,23 @@ def decode_pss_signature(encoded: str) -> bytes:
             f"Expected one of {sorted(_ED25519_SIG_CODES)}."
         )
 
-    # Decode the full 88-char string.
-    # 88 base64url chars = 66 bytes (88 * 6 / 8 = 66).
-    # The first 2 bytes carry the code; the last 64 bytes are the
-    # raw Ed25519 signature.
-    raw = _b64url_decode(encoded)
-    if len(raw) < _ED25519_SIG_SIZE:
+    # CESR format: <2-char code><86-char base64url signature>
+    # Strip the 2-char code prefix, then base64url-decode the remaining
+    # 86 characters to get the raw 64-byte Ed25519 signature.
+    # NOTE: We must NOT decode the full 88 chars and strip bytes, because
+    # base64 operates on 6-bit boundaries — stripping at byte level after
+    # decoding produces incorrect results.
+    sig_b64 = encoded[2:]
+    padded = sig_b64 + "=" * (-len(sig_b64) % 4)
+    try:
+        raw = base64.urlsafe_b64decode(padded)
+    except Exception as exc:
+        raise CESRDecodeError(f"Failed to decode signature: {exc}") from exc
+
+    if len(raw) != _ED25519_SIG_SIZE:
         raise CESRDecodeError(
-            f"Decoded signature too short: expected at least "
+            f"Decoded signature wrong length: expected "
             f"{_ED25519_SIG_SIZE} bytes, got {len(raw)}"
         )
 
-    return raw[-_ED25519_SIG_SIZE:]
+    return raw
