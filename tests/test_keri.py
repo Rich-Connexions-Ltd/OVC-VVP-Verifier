@@ -445,3 +445,31 @@ class TestSignatureRouting:
         from app.vvp.exceptions import SignatureInvalidError
         with pytest.raises(SignatureInvalidError, match="OOBI"):
             _extract_aid_from_kid("https://example.com/no-oobi-path")
+
+
+# ---------------------------------------------------------------------------
+# Tier 2 disabled path
+# ---------------------------------------------------------------------------
+
+
+class TestTier2Disabled:
+    """Test behavior when VVP_TIER2_KEL_ENABLED=false."""
+
+    @pytest.mark.asyncio
+    async def test_resolve_key_state_raises_when_disabled(self):
+        """resolve_key_state should raise ResolutionFailedError when Tier 2 is disabled."""
+        from app.vvp.keri.kel_resolver import resolve_key_state
+        with patch("app.config.VVP_TIER2_KEL_ENABLED", False):
+            with pytest.raises(ResolutionFailedError, match="Tier 2.*disabled"):
+                await resolve_key_state("DAID12345678901234567890123456789012345678901", None)
+
+    @pytest.mark.asyncio
+    async def test_tier2_signature_raises_when_disabled(self):
+        """verify_passport_signature_tier2 should raise when Tier 2 is disabled."""
+        from app.vvp.keri.signature import verify_passport_signature_tier2
+        mock_passport = AsyncMock()
+        mock_passport.header = AsyncMock()
+        mock_passport.header.kid = "DAID12345678901234567890123456789012345678901"
+        with patch("app.config.VVP_TIER2_KEL_ENABLED", False):
+            with pytest.raises(ResolutionFailedError, match="Tier 2.*disabled"):
+                await verify_passport_signature_tier2(mock_passport)
