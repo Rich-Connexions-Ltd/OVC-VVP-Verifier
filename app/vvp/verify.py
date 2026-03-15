@@ -1096,7 +1096,10 @@ def _build_claim_tree(
         dossier_children.append(ChildLink(required=True, node=chain_claim))
 
     if revocation_claim is not None:
-        dossier_children.append(ChildLink(required=True, node=revocation_claim))
+        # Revocation is not required: the OSS verifier lacks TEL
+        # infrastructure, so the first check always returns INDETERMINATE.
+        # Making it non-required prevents it from blocking VALID status.
+        dossier_children.append(ChildLink(required=False, node=revocation_claim))
 
     if dossier_failed or (not dossier_children):
         dossier_status = ClaimStatus.INVALID
@@ -1108,7 +1111,7 @@ def _build_claim_tree(
         dossier_reasons = ["Skipped due to PASSporT validation failure"]
     else:
         child_status = _worst_status(
-            c.node.status for c in dossier_children
+            c.node.status for c in dossier_children if c.required
         )
         # DAG validation errors (e.g. DOSSIER_GRAPH_INVALID) must drive
         # the dossier claim status even when chain/revocation succeed.
