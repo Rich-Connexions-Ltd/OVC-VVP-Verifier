@@ -214,7 +214,7 @@ def verify_party_authorization(ctx: AuthorizationContext) -> ClaimNode:
                 evidence=[
                     f"ape_said:{ape.said[:16]}...",
                     f"issuee_match:{ctx.pss_signer_aid[:16]}...",
-                    f"accountable_party:{issuee[:16]}...",
+                    f"accountable_party:{issuee}",
                 ],
             )
 
@@ -388,7 +388,7 @@ def _verify_via_delegation(
             ]
             if accountable_aid:
                 evidence.append(
-                    f"accountable_party:{accountable_aid[:16]}..."
+                    f"accountable_party:{accountable_aid}"
                 )
             return ClaimNode(
                 name="party_authorized",
@@ -620,13 +620,19 @@ def _extract_authorized_aid(party_claim: ClaimNode) -> Optional[str]:
 
     for ev in party_claim.evidence:
         if ev.startswith("accountable_party:"):
-            # Evidence format: "accountable_party:<aid_prefix>..."
-            return ev.split(":", 1)[1].rstrip(".")
+            return ev.split(":", 1)[1]
 
     # Fallback: if issuee_match is present (Case A, where signer == AP).
+    # In this case the signer IS the accountable party, so use the full
+    # signer AID from the context rather than the truncated evidence.
     for ev in party_claim.evidence:
         if ev.startswith("issuee_match:"):
-            return ev.split(":", 1)[1].rstrip(".")
+            # issuee_match evidence is truncated; accountable_party
+            # evidence (set above) carries the full AID.  If we reach
+            # here it means accountable_party was not set, which only
+            # happens in Case A where signer == issuee.  Return None
+            # and let the caller fall back.
+            return None
 
     return None
 
