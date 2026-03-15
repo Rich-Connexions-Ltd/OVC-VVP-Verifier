@@ -100,13 +100,24 @@ def _require_read_auth(request: Request) -> None:
 
 
 def _require_write_auth(request: Request) -> None:
-    """Fail-closed: returns 503 when VVP_ADMIN_TOKEN is not configured."""
+    """Fail-closed: returns 503 when VVP_ADMIN_TOKEN is not configured.
+
+    Sprint 88: Also enforces HTTPS when VVP_ADMIN_TOKEN is configured,
+    unless TEL_ALLOW_HTTP=true (dev override).
+    """
     _check_same_origin(request)
     token = _cfg.ADMIN_TOKEN
     if token is None:
         raise HTTPException(
             status_code=503,
             detail="Admin mutations require VVP_ADMIN_TOKEN to be configured",
+        )
+    # HTTPS enforcement: reject plaintext admin when token is configured
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    if proto != "https" and not _cfg.TEL_ALLOW_HTTP:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin mutations require HTTPS",
         )
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer ") or auth[7:] != token:

@@ -29,6 +29,8 @@ References
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum
 from typing import Dict, FrozenSet, Optional
 
 __all__ = [
@@ -37,6 +39,9 @@ __all__ = [
     "get_credential_type",
     "is_known_schema",
     "is_brand_schema",
+    "SchemaGovernanceStatus",
+    "CredentialClassification",
+    "classify_credential",
 ]
 
 
@@ -160,3 +165,88 @@ def is_known_schema(cred_type: str, said: str) -> bool:
     if len(known_saids) == 0:
         return True
     return said in known_saids
+
+
+# ---------------------------------------------------------------------------
+# Schema-First Credential Classification (Sprint 88)
+# ---------------------------------------------------------------------------
+
+class SchemaGovernanceStatus(str, Enum):
+    """Governance status of a credential's schema SAID.
+
+    GOVERNED: Schema SAID found in governance registry — type is authoritative.
+    UNCLASSIFIED: Schema SAID not in registry, but type has pending governance
+                  (empty frozenset in KNOWN_SCHEMAS) — INDETERMINATE.
+    UNRECOGNIZED: Schema SAID not in registry and no pending governance match
+                  — INDETERMINATE, fail-closed for auth.
+    """
+    GOVERNED = "governed"
+    UNCLASSIFIED = "unclassified"
+    UNRECOGNIZED = "unrecognized"
+
+
+# Reverse index: schema SAID → credential type (built at module load)
+_SCHEMA_SAID_TO_TYPE: Dict[str, str] = {}
+for _type, _saids in KNOWN_SCHEMAS.items():
+    for _said in _saids:
+        _SCHEMA_SAID_TO_TYPE[_said] = _type
+
+# Types that have no governance SAIDs yet (empty frozenset in registry)
+_PENDING_GOVERNANCE_TYPES: FrozenSet[str] = frozenset(
+    t for t, s in KNOWN_SCHEMAS.items() if not s
+)
+
+
+@dataclass(frozen=True)
+class CredentialClassification:
+    """Immutable, canonical classification result for an ACDC credential.
+
+    Produced once by classify_credential() and consumed by ALL
+    governance-sensitive verifier logic.
+    """
+    credential_type: str
+    governance_status: SchemaGovernanceStatus
+    schema_said: str
+
+    @property
+    def is_governed(self) -> bool:
+        """True only when governance status is GOVERNED."""
+        return self.governance_status == SchemaGovernanceStatus.GOVERNED
+
+    @property
+    def type_is_reliable(self) -> bool:
+        """True when credential type can be trusted for authorization decisions."""
+        return self.governance_status == SchemaGovernanceStatus.GOVERNED
+
+
+def classify_credential(
+    schema_said: str, heuristic_type_hint: str = "unknown"
+) -> CredentialClassification:
+    """Schema-authoritative credential classification.
+
+    Step 1: Reverse-lookup schema_said in the governance registry.
+            If found → GOVERNED, credential_type from registry (authoritative).
+    Step 2: If no match, check if heuristic_type_hint is a pending-governance
+            type (has entry in KNOWN_SCHEMAS but with empty frozenset).
+            If so → UNCLASSIFIED (pending governance, INDETERMINATE).
+    Step 3: Otherwise → UNRECOGNIZED (INDETERMINATE, fail-closed for auth).
+
+    The heuristic_type_hint is NEVER used to produce a GOVERNED result.
+    """
+    # Step 1: Schema-authoritative lookup
+    governed_type = _SCHEMA_SAID_TO_TYPE.get(schema_said)
+    if governed_type is not None:
+        return CredentialClassification(
+            governed_type, SchemaGovernanceStatus.GOVERNED, schema_said
+        )
+
+    # Step 2: Check if heuristic hint indicates a pending-governance type
+    if heuristic_type_hint in _PENDING_GOVERNANCE_TYPES:
+        return CredentialClassification(
+            heuristic_type_hint, SchemaGovernanceStatus.UNCLASSIFIED, schema_said
+        )
+
+    # Step 3: No governance match — unrecognized
+    return CredentialClassification(
+        heuristic_type_hint, SchemaGovernanceStatus.UNRECOGNIZED, schema_said
+    )

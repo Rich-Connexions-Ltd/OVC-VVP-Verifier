@@ -66,6 +66,9 @@ KNOWN_ROOT_LABELS: dict[str, str] = {
 # Admin token for mutation endpoints. None = mutations disabled (fail-closed).
 ADMIN_TOKEN: str | None = os.getenv("VVP_ADMIN_TOKEN")
 
+# Allow HTTP for admin mutations (dev only; production requires HTTPS).
+TEL_ALLOW_HTTP: bool = os.getenv("VVP_ALLOW_HTTP", "false").lower() in ("true", "1", "yes")
+
 
 class _TrustedRootsStore:
     """Thread-safe, asyncio-aware mutable store for trusted root AIDs.

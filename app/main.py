@@ -259,6 +259,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- Vary header middleware (Sprint 88) ---
+@app.middleware("http")
+async def admin_headers(request: Request, call_next):
+    """Add Vary and security headers to /admin/* responses."""
+    resp = await call_next(request)
+    if request.url.path.startswith("/admin"):
+        resp.headers["Vary"] = "Origin, Authorization"
+    return resp
+
 # --- Templates ---
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))

@@ -53,11 +53,43 @@ logger = logging.getLogger("vvp.cache")
 __all__ = [
     "CachedDossierVerification",
     "CacheMetrics",
+    "NegativeCacheEntry",
+    "NEGATIVE_CACHE_MAX_ENTRIES",
+    "NEGATIVE_CACHE_TTL_SECONDS",
     "RevocationStatus",
     "VerificationResultCache",
     "get_verification_cache",
     "reset_verification_cache",
 ]
+
+
+# ======================================================================
+# NegativeCacheEntry (Sprint 88)
+# Slim cache for governance-deterministic INDETERMINATE results.
+# ======================================================================
+
+NEGATIVE_CACHE_MAX_ENTRIES = 1000
+NEGATIVE_CACHE_TTL_SECONDS = 60
+
+
+@dataclass
+class NegativeCacheEntry:
+    """Slim negative cache entry for governance-deterministic INDETERMINATE.
+
+    Only caches deterministic failures (schema governance mismatch, missing
+    required edges). Does NOT cache transient failures (network timeouts,
+    witness unavailability).
+
+    Invalidated when SCHEMA_REGISTRY_VERSION changes.
+    """
+    dossier_url: str
+    reason: str  # e.g., "CVD_MISSING_REQUIRED_EDGE: ..."
+    registry_version: str  # Invalidation key
+    created_at: float = field(default_factory=time.time)
+
+    @property
+    def is_expired(self) -> bool:
+        return (time.time() - self.created_at) > NEGATIVE_CACHE_TTL_SECONDS
 
 
 # ======================================================================
@@ -244,6 +276,9 @@ class VerificationResultCache:
         self._config_hash: str = config_fingerprint()
 
         self._metrics = CacheMetrics()
+
+        # Negative cache (Sprint 88): governance-deterministic INDETERMINATE
+        self._negative_cache: Dict[str, NegativeCacheEntry] = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -447,6 +482,34 @@ class VerificationResultCache:
             for key, entry in self._cache.items():
                 if key[0] == dossier_url:
                     entry.revocation_last_checked = now
+
+    async def clear(self) -> None:
+        """Clear entire cache (positive + negative)."""
+        async with self._lock:
+            self._cache.clear()
+            self._access_order.clear()
+            self._negative_cache.clear()
+
+    # ---- Negative cache (Sprint 88) ----
+
+    def get_negative(self, dossier_url: str, registry_version: str) -> Optional[NegativeCacheEntry]:
+        """Get a negative cache entry if unexpired and version-matching."""
+        entry = self._negative_cache.get(dossier_url)
+        if entry is None:
+            return None
+        if entry.is_expired or entry.registry_version != registry_version:
+            del self._negative_cache[dossier_url]
+            return None
+        return entry
+
+    def put_negative(self, entry: NegativeCacheEntry) -> None:
+        """Store a governance-deterministic INDETERMINATE result."""
+        # Enforce quota
+        while len(self._negative_cache) >= NEGATIVE_CACHE_MAX_ENTRIES:
+            # Evict oldest
+            oldest_key = next(iter(self._negative_cache))
+            del self._negative_cache[oldest_key]
+        self._negative_cache[entry.dossier_url] = entry
 
     def stats(self) -> dict:
         """Return a snapshot of cache metrics and current size.
