@@ -186,15 +186,14 @@ def verify_chain(dag: DossierDAG) -> ClaimNode:
             cred_reasons.extend(said_claim.reasons)
 
         # 3. Signature verification (if signatures present).
+        # Marked as not required: the OSS verifier lacks KERI key state
+        # resolution, so most credentials will have no attached signatures.
+        # SAID validation (above) is the primary integrity check.
         sig_claim = _verify_credential_signature(acdc)
-        cred_children.append(ChildLink(node=sig_claim, required=True))
+        cred_children.append(ChildLink(node=sig_claim, required=False))
         if sig_claim.status == ClaimStatus.INVALID:
             cred_status = ClaimStatus.INVALID
             cred_reasons.extend(sig_claim.reasons)
-        elif sig_claim.status == ClaimStatus.INDETERMINATE:
-            # No signatures — cannot fully validate, but not invalid.
-            if cred_status == ClaimStatus.VALID:
-                cred_status = ClaimStatus.INDETERMINATE
 
         # Build the per-credential claim node.
         cred_name = cred_type if cred_type else f"credential_{said[:8]}"

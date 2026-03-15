@@ -298,18 +298,27 @@ logger = logging.getLogger("vvp.main")
     ),
     tags=["verification"],
 )
-async def verify_endpoint(request: VerifyRequest) -> VerifyResponse:
+async def verify_endpoint(
+    http_request: Request,
+    request: VerifyRequest,
+) -> VerifyResponse:
     """Execute the VVP verification pipeline.
 
     Accepts a JSON body conforming to :class:`VerifyRequest` and
     returns a :class:`VerifyResponse` with the full verification
     result including the hierarchical claim tree.
 
+    The VVP-Identity can be provided either in the JSON body
+    (``vvp_identity`` field) or as a ``VVP-Identity`` HTTP header.
+    The JSON body takes precedence.
+
     Parameters
     ----------
     request : VerifyRequest
         The verification request body.  Required field: ``passport_jwt``.
         Optional fields: ``vvp_identity``, ``dossier_url``.
+    http_request : Request
+        The raw HTTP request (injected by FastAPI).
 
     Returns
     -------
@@ -317,6 +326,13 @@ async def verify_endpoint(request: VerifyRequest) -> VerifyResponse:
         The verification result.
     """
     logger.info("POST /verify received")
+
+    # Extract VVP-Identity from HTTP header if not in JSON body.
+    if not request.vvp_identity:
+        header_identity = http_request.headers.get("VVP-Identity")
+        if header_identity:
+            request.vvp_identity = header_identity
+            logger.debug("Using VVP-Identity from HTTP header")
 
     try:
         response = await verify(request)
