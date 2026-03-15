@@ -86,7 +86,7 @@ from app.vvp.exceptions import (
 )
 from app.vvp.header import VVPIdentity, parse_vvp_identity
 from app.vvp.passport import Passport, parse_passport, validate_passport_binding
-from app.vvp.signature import verify_passport_signature, verify_passport_signature_auto
+from app.vvp.signature import verify_passport_signature, verify_passport_signature_auto, _extract_aid_from_kid
 from app.vvp.dossier import (
     CachedDossier,
     build_and_validate_dossier,
@@ -183,7 +183,10 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
         # Cannot proceed without a parsed PASSporT.
         early_terminate = True
     else:
-        signer_aid = passport.header.kid
+        try:
+            signer_aid = _extract_aid_from_kid(passport.header.kid)
+        except Exception:
+            signer_aid = passport.header.kid
 
         # If identity was not provided, attempt to extract kid from PASSporT
         # for downstream use (Phase 5 dossier URL, Phase 9 authorization).
@@ -949,8 +952,14 @@ def _phase_9_validate_authorization(
     # Extract originating TN from PASSporT payload.
     orig_tn = _extract_orig_tn(passport)
 
+    # Extract bare AID from kid (may be a full OOBI URL)
+    try:
+        signer_aid = _extract_aid_from_kid(passport.header.kid)
+    except Exception:
+        signer_aid = passport.header.kid
+
     ctx = AuthorizationContext(
-        pss_signer_aid=passport.header.kid,
+        pss_signer_aid=signer_aid,
         orig_tn=orig_tn,
         dossier_acdcs=acdcs,
     )
