@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
-from app.config import CLOCK_SKEW_SECONDS, MAX_TOKEN_AGE_SECONDS
+from app.core.config import CLOCK_SKEW_SECONDS, MAX_TOKEN_AGE_SECONDS
 from app.vvp.exceptions import VVPIdentityError
 
 

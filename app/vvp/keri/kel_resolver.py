@@ -79,7 +79,7 @@ def get_cache(config: Optional[CacheConfig] = None) -> KeyStateCache:
         if config is None:
             import logging
             _log = logging.getLogger(__name__)
-            from app.config import VVP_KEY_STATE_FRESHNESS_SECONDS
+            from app.core.config import VVP_KEY_STATE_FRESHNESS_SECONDS
             raw_freshness = VVP_KEY_STATE_FRESHNESS_SECONDS
             freshness = max(10.0, min(3600.0, raw_freshness))
             if freshness != raw_freshness:
@@ -128,7 +128,7 @@ async def resolve_key_state(
         KELChainInvalidError: If chain validation fails.
         KeyNotYetValidError: If no establishment event at/before T.
     """
-    from app.config import VVP_TIER2_KEL_ENABLED
+    from app.core.config import VVP_TIER2_KEL_ENABLED
 
     if not VVP_TIER2_KEL_ENABLED and not _allow_test_mode:
         raise ResolutionFailedError(
@@ -186,7 +186,7 @@ async def resolve_key_state_with_kel(
     Used for delegation authorization validation which requires access to
     the delegator's full KEL to find anchor events.
     """
-    from app.config import VVP_TIER2_KEL_ENABLED
+    from app.core.config import VVP_TIER2_KEL_ENABLED
 
     if not VVP_TIER2_KEL_ENABLED and not _allow_test_mode:
         raise ResolutionFailedError("Tier 2 KEL resolution is disabled.")

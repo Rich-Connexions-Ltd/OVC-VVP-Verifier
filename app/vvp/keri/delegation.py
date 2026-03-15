@@ -19,7 +19,7 @@ from typing import Callable, List, Optional, Set, Tuple
 
 from .kel_parser import EventType, KELEvent
 from .exceptions import KELChainInvalidError, ResolutionFailedError
-from app.vvp.models import ClaimStatus
+from app.vvp.api_models import ClaimStatus
 
 log = logging.getLogger(__name__)
 

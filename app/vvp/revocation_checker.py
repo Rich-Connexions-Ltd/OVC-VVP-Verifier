@@ -45,7 +45,7 @@ import logging
 import time
 from typing import Optional, Set
 
-from app.vvp.cache import RevocationStatus, VerificationResultCache
+from app.vvp.verification_cache import RevocationStatus, VerificationResultCache
 
 logger = logging.getLogger("vvp.revocation")
 
@@ -302,7 +302,7 @@ def get_revocation_checker() -> BackgroundRevocationChecker:
     """
     global _revocation_checker
     if _revocation_checker is None:
-        from app.vvp.cache import get_verification_cache
+        from app.vvp.verification_cache import get_verification_cache
 
         _revocation_checker = BackgroundRevocationChecker(
             cache=get_verification_cache(),

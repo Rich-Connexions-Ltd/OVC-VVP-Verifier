@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.config import (
+from app.core.config import (
     config_fingerprint,
     VERIFICATION_CACHE_ENABLED,
     VERIFICATION_CACHE_MAX_ENTRIES,

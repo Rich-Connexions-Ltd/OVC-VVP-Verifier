@@ -22,7 +22,7 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from app.vvp.cache import (
+from app.vvp.verification_cache import (
     CachedDossierVerification,
     RevocationStatus,
     VerificationResultCache,
@@ -194,7 +194,7 @@ class TestConfigFingerprintInvalidation:
         assert result is not None
 
         # Now change the config fingerprint
-        with patch("app.vvp.cache.config_fingerprint", return_value="changed_hash"):
+        with patch("app.vvp.verification_cache.config_fingerprint", return_value="changed_hash"):
             result = await cache.get("https://example.com/d.cesr", "kid1")
             assert result is None
 

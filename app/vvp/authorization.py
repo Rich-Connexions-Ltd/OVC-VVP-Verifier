@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.vvp.acdc import ACDC
-from app.vvp.models import (
+from app.vvp.api_models import (
     ChildLink,
     ClaimNode,
     ClaimStatus,

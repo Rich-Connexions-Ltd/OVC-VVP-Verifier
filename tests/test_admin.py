@@ -15,7 +15,7 @@ VALID_AID = "EDP1vHcw_wc4M__Fj53-cJaBnZZASd-aMTaSyWEQ-PC2"
 @pytest.fixture(autouse=True)
 def reset_store():
     """Reset trusted roots store and ADMIN_TOKEN to defaults between tests."""
-    import app.config as cfg
+    import app.core.config as cfg
     original_token = cfg.ADMIN_TOKEN
     cfg.ADMIN_TOKEN = None  # default: no token configured
     yield
@@ -31,7 +31,7 @@ def reset_store():
 
 @pytest.fixture()
 def client():
-    import app.config as cfg
+    import app.core.config as cfg
     import app.main as main_mod
     from app.admin import router as admin_router
 
@@ -60,14 +60,14 @@ def _auth(token="test-token"):
 
 class TestConfigStore:
     def test_snapshot_is_frozenset(self):
-        import app.config as cfg
+        import app.core.config as cfg
         result = asyncio.get_event_loop().run_until_complete(
             cfg._trusted_roots_store.snapshot()
         )
         assert isinstance(result, frozenset)
 
     def test_add_and_remove(self):
-        import app.config as cfg
+        import app.core.config as cfg
         loop = asyncio.get_event_loop()
         loop.run_until_complete(cfg._trusted_roots_store.replace(set()))
         after_add = loop.run_until_complete(cfg._trusted_roots_store.add(VALID_AID))
@@ -76,27 +76,27 @@ class TestConfigStore:
         assert VALID_AID not in after_remove
 
     def test_remove_nonexistent_raises(self):
-        import app.config as cfg
+        import app.core.config as cfg
         loop = asyncio.get_event_loop()
         loop.run_until_complete(cfg._trusted_roots_store.replace(set()))
         with pytest.raises(KeyError):
             loop.run_until_complete(cfg._trusted_roots_store.remove("nonexistent"))
 
     def test_replace_atomic(self):
-        import app.config as cfg
+        import app.core.config as cfg
         result = asyncio.get_event_loop().run_until_complete(
             cfg._trusted_roots_store.replace({VALID_AID})
         )
         assert result == frozenset({VALID_AID})
 
     def test_current_sync(self):
-        import app.config as cfg
+        import app.core.config as cfg
         loop = asyncio.get_event_loop()
         loop.run_until_complete(cfg._trusted_roots_store.replace({VALID_AID}))
         assert cfg.get_trusted_roots_current() == frozenset({VALID_AID})
 
     def test_config_fingerprint_uses_roots(self):
-        import app.config as cfg
+        import app.core.config as cfg
         fp1 = cfg.config_fingerprint(frozenset({VALID_AID}))
         fp2 = cfg.config_fingerprint(frozenset())
         assert fp1 != fp2
@@ -104,7 +104,7 @@ class TestConfigStore:
     def test_admin_token_from_env(self, monkeypatch):
         monkeypatch.setenv("VVP_ADMIN_TOKEN", "mytoken")
         import importlib
-        import app.config as cfg
+        import app.core.config as cfg
         importlib.reload(cfg)
         # ADMIN_TOKEN should be set from env — but since we set it after import,
         # test the monkeypatched attribute directly
@@ -129,7 +129,7 @@ class TestGetTrustedRoots:
         assert "no-store" in resp.headers.get("cache-control", "").lower()
 
     def test_requires_token_when_set(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "secret")
         from app.main import app
         c = TestClient(app)
@@ -137,7 +137,7 @@ class TestGetTrustedRoots:
         assert resp.status_code == 401
 
     def test_accepts_correct_token(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         import app.admin as adm
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "secret")
         from app.main import app
@@ -157,7 +157,7 @@ class TestAddTrustedRoot:
         assert resp.status_code == 503
 
     def test_add_success(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         import app.admin as adm
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "tok")
         monkeypatch.setattr(adm, "_LAST_MUTATION_TS", 0.0)
@@ -177,7 +177,7 @@ class TestAddTrustedRoot:
         assert "_mutation_warning" in data
 
     def test_add_invalid_aid(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         import app.admin as adm
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "tok")
         monkeypatch.setattr(adm, "_LAST_MUTATION_TS", 0.0)
@@ -197,7 +197,7 @@ class TestAddTrustedRoot:
 
 class TestRemoveTrustedRoot:
     def test_remove_success(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         import app.admin as adm
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "tok")
         monkeypatch.setattr(adm, "_LAST_MUTATION_TS", 0.0)
@@ -217,7 +217,7 @@ class TestRemoveTrustedRoot:
         assert data["empty_set_active"] is True
 
     def test_remove_nonexistent_404(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         import app.admin as adm
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "tok")
         monkeypatch.setattr(adm, "_LAST_MUTATION_TS", 0.0)
@@ -240,7 +240,7 @@ class TestRemoveTrustedRoot:
 
 class TestReplaceTrustedRoots:
     def test_replace_success(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         import app.admin as adm
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "tok")
         monkeypatch.setattr(adm, "_LAST_MUTATION_TS", 0.0)
@@ -256,7 +256,7 @@ class TestReplaceTrustedRoots:
         assert data["trusted_roots"] == [VALID_AID]
 
     def test_replace_empty_fail_closed(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         import app.admin as adm
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "tok")
         monkeypatch.setattr(adm, "_LAST_MUTATION_TS", 0.0)
@@ -280,7 +280,7 @@ class TestReplaceTrustedRoots:
 
 class TestRateLimiting:
     def test_rate_limited_after_mutation(self, monkeypatch):
-        import app.config as cfg
+        import app.core.config as cfg
         import app.admin as adm
         monkeypatch.setattr(cfg, "ADMIN_TOKEN", "tok")
         monkeypatch.setattr(adm, "_LAST_MUTATION_TS", 0.0)

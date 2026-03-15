@@ -33,7 +33,7 @@ from app.vvp.keri.exceptions import (
     UnsupportedSerializationKind,
     redact_for_log,
 )
-from app.vvp.models import ErrorCode
+from app.vvp.api_models import ErrorCode
 
 
 class TestExceptions:
@@ -407,19 +407,19 @@ class TestTier2Config:
     """Tier 2 configuration values."""
 
     def test_tier2_enabled_default(self):
-        from app.config import VVP_TIER2_KEL_ENABLED
+        from app.core.config import VVP_TIER2_KEL_ENABLED
         assert isinstance(VVP_TIER2_KEL_ENABLED, bool)
 
     def test_freshness_seconds_default(self):
-        from app.config import VVP_KEY_STATE_FRESHNESS_SECONDS
+        from app.core.config import VVP_KEY_STATE_FRESHNESS_SECONDS
         assert VVP_KEY_STATE_FRESHNESS_SECONDS == 120.0
 
     def test_oobi_timeout_default(self):
-        from app.config import VVP_OOBI_TIMEOUT_SECONDS
+        from app.core.config import VVP_OOBI_TIMEOUT_SECONDS
         assert VVP_OOBI_TIMEOUT_SECONDS == 5.0
 
     def test_admin_disabled_by_default(self):
-        from app.config import VVP_ADMIN_ENABLED
+        from app.core.config import VVP_ADMIN_ENABLED
         assert VVP_ADMIN_ENABLED is False
 
 
@@ -459,7 +459,7 @@ class TestTier2Disabled:
     async def test_resolve_key_state_raises_when_disabled(self):
         """resolve_key_state should raise ResolutionFailedError when Tier 2 is disabled."""
         from app.vvp.keri.kel_resolver import resolve_key_state
-        with patch("app.config.VVP_TIER2_KEL_ENABLED", False):
+        with patch("app.core.config.VVP_TIER2_KEL_ENABLED", False):
             with pytest.raises(ResolutionFailedError, match="Tier 2.*disabled"):
                 await resolve_key_state("DAID12345678901234567890123456789012345678901", None)
 
@@ -470,6 +470,6 @@ class TestTier2Disabled:
         mock_passport = AsyncMock()
         mock_passport.header = AsyncMock()
         mock_passport.header.kid = "DAID12345678901234567890123456789012345678901"
-        with patch("app.config.VVP_TIER2_KEL_ENABLED", False):
+        with patch("app.core.config.VVP_TIER2_KEL_ENABLED", False):
             with pytest.raises(ResolutionFailedError, match="Tier 2.*disabled"):
                 await verify_passport_signature_tier2(mock_passport)

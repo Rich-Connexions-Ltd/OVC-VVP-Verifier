@@ -66,11 +66,11 @@ async def _verify_passport_signature_tier2_impl(
     Both verify_passport_signature_tier2() and
     verify_passport_signature_tier2_with_key_state() use this.
     """
-    from app.config import VVP_TIER2_KEL_ENABLED
+    from app.core.config import VVP_TIER2_KEL_ENABLED
     from .kel_resolver import resolve_key_state, resolve_key_state_with_kel, KeyState
     from .exceptions import ResolutionFailedError, KELChainInvalidError
     from .delegation import resolve_delegation_chain, validate_delegation_authorization
-    from app.vvp.models import ClaimStatus
+    from app.vvp.api_models import ClaimStatus
 
     if not VVP_TIER2_KEL_ENABLED and not _allow_test_mode:
         raise ResolutionFailedError(

@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.vvp.models import (
+from app.vvp.api_models import (
     CAPABILITIES,
     ClaimNode,
     ClaimStatus,
@@ -366,7 +366,7 @@ class TestRevocationCheckerWiring:
 
     def test_revocation_checker_imports(self):
         """BackgroundRevocationChecker should be importable."""
-        from app.vvp.revocation import BackgroundRevocationChecker, get_revocation_checker
+        from app.vvp.revocation_checker import BackgroundRevocationChecker, get_revocation_checker
         assert BackgroundRevocationChecker is not None
 
     def test_tel_module_exports(self):

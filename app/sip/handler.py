@@ -40,7 +40,7 @@ from app.sip.builder import (
     extract_contact_uri,
 )
 from app.sip.models import SIPRequest, SIPResponse
-from app.vvp.models import VerifyRequest
+from app.vvp.api_models import VerifyRequest
 
 logger = logging.getLogger(__name__)
 

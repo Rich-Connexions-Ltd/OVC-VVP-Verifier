@@ -81,11 +81,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from app.config import HTTP_HOST, HTTP_PORT, SIP_HOST, SIP_PORT, LOG_LEVEL, VVP_ADMIN_ENABLED, get_trusted_roots_current
-from app.vvp.models import CAPABILITIES, VerifyRequest, VerifyResponse
+from app.core.config import HTTP_HOST, HTTP_PORT, SIP_HOST, SIP_PORT, LOG_LEVEL, VVP_ADMIN_ENABLED, get_trusted_roots_current
+from app.vvp.api_models import CAPABILITIES, VerifyRequest, VerifyResponse
 from app.vvp.verify import verify
-from app.vvp.cache import get_verification_cache
-from app.vvp.revocation import get_revocation_checker
+from app.vvp.verification_cache import get_verification_cache
+from app.vvp.revocation_checker import get_revocation_checker
 from app.sip.transport import SIPTransport
 from app.sip.handler import handle_invite
 from app.admin import router as admin_router
@@ -508,7 +508,7 @@ async def admin_ui(request: Request) -> HTMLResponse:
     template_path = _TEMPLATES_DIR / "admin.html"
     if template_path.exists():
         roots = get_trusted_roots_current()
-        from app.config import KNOWN_ROOT_LABELS
+        from app.core.config import KNOWN_ROOT_LABELS
         return templates.TemplateResponse(
             "admin.html",
             {

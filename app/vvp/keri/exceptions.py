@@ -14,7 +14,7 @@ import re
 import urllib.parse
 from typing import Optional
 
-from app.vvp.models import ErrorCode
+from app.vvp.api_models import ErrorCode
 
 
 # ---------------------------------------------------------------------------

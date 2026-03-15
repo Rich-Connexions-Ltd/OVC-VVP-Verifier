@@ -63,8 +63,8 @@ import time
 import uuid
 from typing import List, Optional, Tuple
 
-from app.config import VERIFICATION_CACHE_ENABLED
-from app.vvp.models import (
+from app.core.config import VERIFICATION_CACHE_ENABLED
+from app.vvp.api_models import (
     CAPABILITIES,
     ChildLink,
     ClaimNode,
@@ -96,13 +96,13 @@ from app.vvp.dossier import (
 )
 from app.vvp.acdc import ACDC, DossierDAG, verify_chain
 from app.vvp.tel import ChainRevocationResult, CredentialStatus, check_chain_revocation
-from app.vvp.cache import (
+from app.vvp.verification_cache import (
     CachedDossierVerification,
     RevocationStatus,
     VerificationResultCache,
     get_verification_cache,
 )
-from app.vvp.revocation import get_revocation_checker
+from app.vvp.revocation_checker import get_revocation_checker
 from app.vvp.authorization import AuthorizationContext, validate_authorization
 
 logger = logging.getLogger("vvp.verify")

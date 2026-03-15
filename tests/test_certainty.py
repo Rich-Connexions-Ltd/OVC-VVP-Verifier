@@ -4,7 +4,7 @@
 
 import pytest
 
-from app.vvp.models import ClaimStatus, VerifyResponse, _status_to_certainty
+from app.vvp.api_models import ClaimStatus, VerifyResponse, _status_to_certainty
 from app.sip.builder import _sanitize_sip_header_value, build_vvp_headers
 
 

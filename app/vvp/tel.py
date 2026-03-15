@@ -47,7 +47,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.config import TEL_CLIENT_TIMEOUT_SECONDS, WITNESS_URLS
+from app.core.config import TEL_CLIENT_TIMEOUT_SECONDS, WITNESS_URLS
 
 logger = logging.getLogger(__name__)
 

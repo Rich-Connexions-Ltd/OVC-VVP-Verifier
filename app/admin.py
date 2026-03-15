@@ -24,8 +24,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-import app.config as _cfg
-from app.config import (
+import app.core.config as _cfg
+from app.core.config import (
     KNOWN_ROOT_LABELS,
     _trusted_roots_store,
     get_trusted_roots_current,
@@ -199,7 +199,7 @@ async def replace_trusted_roots(req: TrustedRootReplaceRequest, request: Request
 def _invalidate_cache() -> None:
     """Clear verification cache after trusted roots mutation."""
     try:
-        from app.vvp.cache import reset_verification_cache
+        from app.vvp.verification_cache import reset_verification_cache
         reset_verification_cache()
     except Exception:
         pass

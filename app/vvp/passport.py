@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.config import (
+from app.core.config import (
     ALLOW_PASSPORT_EXP_OMISSION,
     ALLOWED_ALGORITHMS,
     CLOCK_SKEW_SECONDS,

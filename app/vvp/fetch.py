@@ -28,7 +28,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.config import (
+from app.core.config import (
     ALLOW_HTTP,
     FETCH_MAX_SIZE_BYTES,
     FETCH_TIMEOUT_SECONDS,
