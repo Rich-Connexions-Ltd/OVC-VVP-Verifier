@@ -178,18 +178,27 @@ def verify_party_authorization(ctx: AuthorizationContext) -> ClaimNode:
         return _verify_via_delegation(ctx, matching_des)
 
     # --- Case A: Direct APE match ---
+    # Also accept Brand credentials (ExtendedBrand/BrandOwner) as APE equivalent:
+    # the Brand credential's issuee is the originating party in VVP dossiers
+    # that use Brand+TNAlloc instead of a dedicated APE credential.
+    if not ape_credentials:
+        brand_credentials = _find_credentials_by_type(ctx.dossier_acdcs, "ExtendedBrand") + \
+            _find_credentials_by_type(ctx.dossier_acdcs, "BrandOwner")
+        if brand_credentials:
+            ape_credentials = brand_credentials
+
     if not ape_credentials:
         return ClaimNode(
             name="party_authorized",
             status=ClaimStatus.INVALID,
-            reasons=["No APE credential found in dossier"],
+            reasons=["No APE or Brand credential found in dossier"],
             evidence=[f"signer:{ctx.pss_signer_aid[:16]}..."],
             children=[
                 ChildLink(
                     node=ClaimNode(
                         name="ape_lookup",
                         status=ClaimStatus.INVALID,
-                        reasons=["No APE credential in dossier"],
+                        reasons=["No APE or Brand credential in dossier"],
                     ),
                     required=True,
                 ),
