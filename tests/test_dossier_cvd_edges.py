@@ -70,11 +70,11 @@ def _make_dossier_with_edges(edge_names, optional_edges=None):
 # ---------------------------------------------------------------------------
 
 class TestCVDEdgeConstants:
-    def test_required_edges_are_four(self):
-        assert DOSSIER_CVD_REQUIRED_EDGES == frozenset({"vetting", "alloc", "tnalloc", "delsig"})
+    def test_required_edges_are_three(self):
+        assert DOSSIER_CVD_REQUIRED_EDGES == frozenset({"vetting", "tnalloc", "delsig"})
 
     def test_optional_edges(self):
-        assert DOSSIER_CVD_OPTIONAL_EDGES == frozenset({"bownr", "bproxy"})
+        assert DOSSIER_CVD_OPTIONAL_EDGES == frozenset({"alloc", "bownr", "bproxy"})
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ class TestCVDEdgesMissing:
         root = _MockACDC(edges={})
         status, evidence = validate_dossier_cvd_edges(root, {}, {})
         assert status == ClaimStatus.INVALID
-        assert len(evidence) == 4  # all 4 missing
+        assert len(evidence) == 3  # all 3 missing
 
     def test_no_edges_at_all(self):
         root = _MockACDC(edges=None)
@@ -178,7 +178,7 @@ class TestCVDEdgesGovernance:
     def test_multiple_unclassified_targets(self):
         root, acdcs, cls = _make_dossier_with_edges(DOSSIER_CVD_REQUIRED_EDGES)
         cls["Evetting_target"] = _unclassified("Evetting_target")
-        cls["Ealloc_target"] = _unclassified("Ealloc_target")
+        cls["Etnalloc_target"] = _unclassified("Etnalloc_target")
         status, evidence = validate_dossier_cvd_edges(root, acdcs, cls)
         assert status == ClaimStatus.INDETERMINATE
         governance_warnings = [e for e in evidence if "CVD_TARGET_NOT_GOVERNED" in e]

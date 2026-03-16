@@ -78,10 +78,10 @@ def build_and_validate_dossier(
 # ---------------------------------------------------------------------------
 
 DOSSIER_CVD_REQUIRED_EDGES: FrozenSet[str] = frozenset({
-    "vetting", "alloc", "tnalloc", "delsig",
+    "vetting", "tnalloc", "delsig",
 })
 DOSSIER_CVD_OPTIONAL_EDGES: FrozenSet[str] = frozenset({
-    "bownr", "bproxy",
+    "alloc", "bownr", "bproxy",
 })
 DOSSIER_CVD_ALL_EDGES: FrozenSet[str] = (
     DOSSIER_CVD_REQUIRED_EDGES | DOSSIER_CVD_OPTIONAL_EDGES
