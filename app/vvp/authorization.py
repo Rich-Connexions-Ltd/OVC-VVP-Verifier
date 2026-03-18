@@ -165,7 +165,10 @@ def verify_party_authorization(ctx: AuthorizationContext) -> ClaimNode:
         INDETERMINATE.
     """
     ape_credentials = _find_credentials_by_type(ctx.dossier_acdcs, "APE")
+    gcd_credentials = _find_credentials_by_type(ctx.dossier_acdcs, "GCD")
     de_credentials = _find_credentials_by_type(ctx.dossier_acdcs, "DE")
+    # GCD credentials are APE-equivalent (dossier root)
+    ape_credentials.extend(gcd_credentials)
 
     # Find DEs where issuee == signer (matching DEs for Case B).
     matching_des = [
@@ -205,18 +208,33 @@ def verify_party_authorization(ctx: AuthorizationContext) -> ClaimNode:
             ],
         )
 
+    # Check if any APE/GCD/Brand has issuee (or issuer for GCD) matching the signer
     for ape in ape_credentials:
-        issuee = _get_issuee(ape)
-        if issuee == ctx.pss_signer_aid:
-            return ClaimNode(
-                name="party_authorized",
-                status=ClaimStatus.VALID,
-                evidence=[
-                    f"ape_said:{ape.said[:16]}...",
-                    f"issuee_match:{ctx.pss_signer_aid[:16]}...",
-                    f"accountable_party:{issuee}",
-                ],
-            )
+        ape_type = get_credential_type(ape.schema)
+        # For GCD credentials, the issuer IS the accountable party
+        if ape_type == "GCD":
+            if ape.issuer == ctx.pss_signer_aid:
+                return ClaimNode(
+                    name="party_authorized",
+                    status=ClaimStatus.VALID,
+                    evidence=[
+                        f"gcd_said:{ape.said[:16]}...",
+                        f"issuer_match:{ctx.pss_signer_aid[:16]}...",
+                        f"accountable_party:{ape.issuer}",
+                    ],
+                )
+        else:
+            issuee = _get_issuee(ape)
+            if issuee == ctx.pss_signer_aid:
+                return ClaimNode(
+                    name="party_authorized",
+                    status=ClaimStatus.VALID,
+                    evidence=[
+                        f"ape_said:{ape.said[:16]}...",
+                        f"issuee_match:{ctx.pss_signer_aid[:16]}...",
+                        f"accountable_party:{issuee}",
+                    ],
+                )
 
     # No APE with matching issuee.
     return ClaimNode(
@@ -380,7 +398,12 @@ def _verify_via_delegation(
     for de in matching_des:
         ape = _walk_de_chain(de, ctx.dossier_acdcs)
         if ape is not None:
-            accountable_aid = _get_issuee(ape)
+            # For GCD, the issuer IS the accountable party (no issuee field)
+            ape_type = get_credential_type(ape.schema)
+            if ape_type == "GCD":
+                accountable_aid = ape.issuer
+            else:
+                accountable_aid = _get_issuee(ape)
             evidence = [
                 f"de_said:{de.said[:16]}...",
                 f"de_issuee_match:{ctx.pss_signer_aid[:16]}...",
@@ -449,6 +472,12 @@ def _walk_de_chain(
 
         target = _find_delegation_target(current, acdcs)
         if target is None:
+            # DE has no delegation edge - check if it's referenced by an APE/GCD
+            # This handles terminal DEs that are directly linked from the APE
+            # (e.g., TN Allocator referenced via APE's "alloc" edge)
+            referencing_ape = _find_ape_referencing_de(current.said, acdcs)
+            if referencing_ape:
+                return referencing_ape
             logger.debug(
                 "DE %s has no resolvable delegation edge target",
                 current.said[:20],
@@ -464,7 +493,13 @@ def _walk_de_chain(
         # Determine the credential type of the target.
         target_type = get_credential_type(target.schema)
 
-        if target_type == "APE":
+        if target_type in ("APE", "GCD"):
+            return target
+
+        # LE credentials are valid chain termini -- they connect to the
+        # trust anchor through the QVI -> GLEIF chain. The LE issuee
+        # is the accountable party (legal entity).
+        if target_type == "LE":
             return target
 
         if target_type == "DE":
@@ -481,6 +516,50 @@ def _walk_de_chain(
         return None
 
     logger.warning("Delegation chain exceeds max depth %d", max_depth)
+    return None
+
+
+def _find_ape_referencing_de(
+    de_said: str,
+    acdcs: List[ACDC],
+) -> Optional[ACDC]:
+    """Find an APE or GCD credential that references a DE credential via any edge.
+
+    This handles terminal DEs that don't have their own delegation edge
+    but are referenced by the APE/GCD (e.g., via "alloc", "delsig" edges).
+
+    Parameters
+    ----------
+    de_said : str
+        The SAID of the DE credential to look for.
+    acdcs : list[ACDC]
+        All credentials in the dossier.
+
+    Returns
+    -------
+    ACDC or None
+        The APE/GCD credential that references this DE, or ``None``.
+    """
+    ape_credentials = (
+        _find_credentials_by_type(acdcs, "APE")
+        + _find_credentials_by_type(acdcs, "GCD")
+    )
+
+    for ape in ape_credentials:
+        if not ape.edges:
+            continue
+
+        # Check all edges of the APE for references to this DE
+        for edge_name, edge_ref in ape.edges.items():
+            target_said = None
+            if isinstance(edge_ref, str):
+                target_said = edge_ref
+            elif isinstance(edge_ref, dict):
+                target_said = edge_ref.get("n") or edge_ref.get("d")
+
+            if target_said == de_said:
+                return ape
+
     return None
 
 

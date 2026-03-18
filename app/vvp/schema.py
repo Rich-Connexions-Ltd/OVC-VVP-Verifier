@@ -89,6 +89,12 @@ KNOWN_SCHEMAS: Dict[str, FrozenSet[str]] = {
     "VetterGov": frozenset({
         "EIBowJmxx5hNWQlfXqGcbN0aP_RBuucMW6mle4tAN6TL",  # VVP VetterGov schema
     }),
+    "GCD": frozenset({
+        "EH1jN4U4LMYHmPVI4FYdZ10bIPR7YWKp8TDdZ9Y9Al-P",  # GCD schema (dossier root)
+    }),
+    "BrandProxy": frozenset({
+        "EKT78lcI-noD9GEMoqqpfK1NMgEGz5P-6vWBiGOXpbYe",  # Brand proxy credential v1.0.0
+    }),
 }
 
 
